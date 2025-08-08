@@ -18,6 +18,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mohammadsalik.secureit.presentation.auth.AuthViewModel
 import com.mohammadsalik.secureit.presentation.vault.VaultDashboardScreen
+import com.mohammadsalik.secureit.presentation.passwords.PasswordListScreen
+import com.mohammadsalik.secureit.presentation.passwords.PasswordEditScreen
+import com.mohammadsalik.secureit.presentation.documents.DocumentListScreen
+import com.mohammadsalik.secureit.presentation.documents.DocumentUploadScreen
+import com.mohammadsalik.secureit.presentation.notes.SecureNoteListScreen
+import com.mohammadsalik.secureit.presentation.notes.SecureNoteEditScreen
+import com.mohammadsalik.secureit.presentation.search.GlobalSearchScreen
 import com.mohammadsalik.secureit.ui.theme.SecureItTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -44,6 +51,7 @@ fun SecureVaultApp() {
     val viewModel: AuthViewModel = hiltViewModel()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Welcome) }
+    var navigationStack by remember { mutableStateOf(listOf<Screen>()) }
 
     // Determine initial screen based on authentication state
     LaunchedEffect(authState) {
@@ -51,6 +59,18 @@ fun SecureVaultApp() {
             !authState.isPinSet -> Screen.Welcome
             !authState.isAuthenticated -> Screen.PinEntry
             else -> Screen.MainVault
+        }
+    }
+
+    fun navigateTo(screen: Screen) {
+        navigationStack = navigationStack + currentScreen
+        currentScreen = screen
+    }
+
+    fun navigateBack() {
+        if (navigationStack.isNotEmpty()) {
+            currentScreen = navigationStack.last()
+            navigationStack = navigationStack.dropLast(1)
         }
     }
 
@@ -65,17 +85,50 @@ fun SecureVaultApp() {
             onBiometricSetupComplete = { currentScreen = Screen.MainVault }
         )
         Screen.MainVault -> VaultDashboardScreen(
-            onNavigateToPasswords = { /* TODO: Navigate to passwords */ },
-            onNavigateToDocuments = { /* TODO: Navigate to documents */ },
-            onNavigateToNotes = { /* TODO: Navigate to notes */ },
+            onNavigateToPasswords = { navigateTo(Screen.PasswordList) },
+            onNavigateToDocuments = { navigateTo(Screen.DocumentList) },
+            onNavigateToNotes = { navigateTo(Screen.NoteList) },
             onLogout = {
                 viewModel.logout()
                 currentScreen = Screen.PinEntry
+                navigationStack = emptyList()
             }
         )
         Screen.PinEntry -> PinEntryScreen(
             onPinCorrect = { currentScreen = Screen.MainVault },
             onForgotPin = { currentScreen = Screen.Welcome }
+        )
+        Screen.PasswordList -> PasswordListScreen(
+            onPasswordClick = { navigateTo(Screen.PasswordEdit) },
+            onAddPassword = { navigateTo(Screen.PasswordEdit) }
+        )
+        Screen.PasswordEdit -> PasswordEditScreen(
+            onSave = { navigateBack() },
+            onCancel = { navigateBack() }
+        )
+        Screen.DocumentList -> DocumentListScreen(
+            onDocumentClick = { /* TODO: Document detail view */ },
+            onAddDocument = { navigateTo(Screen.DocumentUpload) }
+        )
+        Screen.DocumentUpload -> DocumentUploadScreen(
+            onUploadComplete = { navigateBack() },
+            onCancel = { navigateBack() }
+        )
+        Screen.NoteList -> SecureNoteListScreen(
+            onNoteClick = { navigateTo(Screen.NoteEdit) },
+            onAddNote = { navigateTo(Screen.NoteEdit) }
+        )
+        Screen.NoteEdit -> SecureNoteEditScreen(
+            onSave = { navigateBack() },
+            onCancel = { navigateBack() }
+        )
+        Screen.GlobalSearch -> GlobalSearchScreen(
+            onPasswordClick = { navigateTo(Screen.PasswordEdit) },
+            onDocumentClick = { /* TODO: Document detail view */ },
+            onNoteClick = { navigateTo(Screen.NoteEdit) },
+            onAddPassword = { navigateTo(Screen.PasswordEdit) },
+            onAddDocument = { navigateTo(Screen.DocumentUpload) },
+            onAddNote = { navigateTo(Screen.NoteEdit) }
         )
     }
 }
@@ -86,6 +139,13 @@ sealed class Screen {
     object BiometricSetup : Screen()
     object MainVault : Screen()
     object PinEntry : Screen()
+    object PasswordList : Screen()
+    object PasswordEdit : Screen()
+    object DocumentList : Screen()
+    object DocumentUpload : Screen()
+    object NoteList : Screen()
+    object NoteEdit : Screen()
+    object GlobalSearch : Screen()
 }
 
 @Composable
