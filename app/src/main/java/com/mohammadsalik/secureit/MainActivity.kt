@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mohammadsalik.secureit.presentation.auth.AuthViewModel
+import com.mohammadsalik.secureit.presentation.vault.VaultDashboardScreen
 import com.mohammadsalik.secureit.ui.theme.SecureItTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -63,7 +64,10 @@ fun SecureVaultApp() {
         Screen.BiometricSetup -> BiometricSetupScreen(
             onBiometricSetupComplete = { currentScreen = Screen.MainVault }
         )
-        Screen.MainVault -> MainVaultScreen(
+        Screen.MainVault -> VaultDashboardScreen(
+            onNavigateToPasswords = { /* TODO: Navigate to passwords */ },
+            onNavigateToDocuments = { /* TODO: Navigate to documents */ },
+            onNavigateToNotes = { /* TODO: Navigate to notes */ },
             onLogout = {
                 viewModel.logout()
                 currentScreen = Screen.PinEntry
@@ -434,119 +438,5 @@ fun NumberButton(
             fontSize = 20.sp,
             fontWeight = FontWeight.Medium
         )
-    }
-}
-
-@Composable
-fun MainVaultScreen(onLogout: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
-    ) {
-        // Header with logout button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "SecureVault",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            IconButton(onClick = onLogout) {
-                Icon(
-                    imageVector = Icons.Default.ExitToApp,
-                    contentDescription = "Logout"
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "Your Personal Security Vault",
-            fontSize = 18.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Welcome to your secure vault! Here you can store and manage your passwords, documents, and other sensitive information.",
-            fontSize = 16.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Placeholder for vault categories
-        VaultCategoryCard(
-            title = "Passwords",
-            description = "Manage your login credentials",
-            icon = "🔑"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        VaultCategoryCard(
-            title = "Documents",
-            description = "Store encrypted files and documents",
-            icon = "📄"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        VaultCategoryCard(
-            title = "Notes",
-            description = "Secure text notes and information",
-            icon = "📝"
-        )
-    }
-}
-
-@Composable
-fun VaultCategoryCard(
-    title: String,
-    description: String,
-    icon: String
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(80.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = icon,
-                fontSize = 32.sp
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Text(
-                    text = description,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-            }
-        }
     }
 }
