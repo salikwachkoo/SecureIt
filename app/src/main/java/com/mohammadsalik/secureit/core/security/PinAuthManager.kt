@@ -18,86 +18,75 @@ import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "secure_vault_prefs")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "pin_auth")
 
 @Singleton
 class PinAuthManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val encryptionManager: EncryptionManager
 ) {
-    private val secureRandom = SecureRandom()
-    
     companion object {
-        private const val PIN_LENGTH = 4
-        private const val MAX_FAILED_ATTEMPTS = 10
-        private const val LOCKOUT_DURATION_MS = 30000L // 30 seconds
-        private const val PROGRESSIVE_DELAY_MULTIPLIER = 2L
+        private const val MAX_FAILED_ATTEMPTS = 5
+        private const val LOCKOUT_DURATION_MS = 30 * 60 * 1000L // 30 minutes
+        private const val SALT_LENGTH = 32
     }
-    
+
     private val pinHashKey = stringPreferencesKey("pin_hash")
     private val pinSaltKey = stringPreferencesKey("pin_salt")
+    private val isPinSetKey = booleanPreferencesKey("is_pin_set")
     private val failedAttemptsKey = intPreferencesKey("failed_attempts")
     private val lastFailedAttemptKey = longPreferencesKey("last_failed_attempt")
-    private val isPinSetKey = booleanPreferencesKey("is_pin_set")
     private val isBiometricEnabledKey = booleanPreferencesKey("is_biometric_enabled")
-    
+
     /**
-     * Checks if PIN is set
+     * Checks if a PIN is set
      */
     suspend fun isPinSet(): Boolean {
-        return context.dataStore.data.map { preferences ->
-            preferences[isPinSetKey] ?: false
-        }.first()
+        return context.dataStore.data.first()[isPinSetKey] ?: false
     }
-    
+
     /**
      * Sets up a new PIN
      */
     suspend fun setupPin(pin: String): Boolean {
-        if (pin.length != PIN_LENGTH || !pin.all { it.isDigit() }) {
-            return false
+        return try {
+            val salt = generateSalt()
+            val hashedPin = hashPin(pin, salt)
+
+            context.dataStore.edit { preferences ->
+                preferences[pinHashKey] = hashedPin
+                preferences[pinSaltKey] = salt
+                preferences[isPinSetKey] = true
+                preferences[failedAttemptsKey] = 0
+                preferences[lastFailedAttemptKey] = 0L
+            }
+            true
+        } catch (e: Exception) {
+            false
         }
-        
-        val salt = generateSalt()
-        val hash = hashPin(pin, salt)
-        
-        context.dataStore.edit { preferences ->
-            preferences[pinHashKey] = hash
-            preferences[pinSaltKey] = salt
-            preferences[isPinSetKey] = true
-            preferences[failedAttemptsKey] = 0
-            preferences[lastFailedAttemptKey] = 0L
-        }
-        
-        return true
     }
-    
+
     /**
      * Validates a PIN
      */
     suspend fun validatePin(pin: String): PinValidationResult {
-        // Check if device is locked out
         val lockoutInfo = getLockoutInfo()
+
         if (lockoutInfo.isLockedOut) {
             return PinValidationResult.LockedOut(lockoutInfo.remainingTime)
         }
-        
-        val storedHash = context.dataStore.data.map { preferences ->
-            preferences[pinHashKey]
-        }.first()
-        
-        val storedSalt = context.dataStore.data.map { preferences ->
-            preferences[pinSaltKey]
-        }.first()
-        
+
+        val storedHash = context.dataStore.data.first()[pinHashKey]
+        val storedSalt = context.dataStore.data.first()[pinSaltKey]
+
         if (storedHash == null || storedSalt == null) {
-            return PinValidationResult.Error("PIN not set")
+            return PinValidationResult.Invalid
         }
-        
+
         val inputHash = hashPin(pin, storedSalt)
-        
+
         if (inputHash == storedHash) {
-            // Reset failed attempts on successful authentication
+            // Reset failed attempts on successful validation
             context.dataStore.edit { preferences ->
                 preferences[failedAttemptsKey] = 0
                 preferences[lastFailedAttemptKey] = 0L
@@ -105,70 +94,55 @@ class PinAuthManager @Inject constructor(
             return PinValidationResult.Success
         } else {
             // Increment failed attempts
-            val currentAttempts = context.dataStore.data.map { preferences ->
-                preferences[failedAttemptsKey] ?: 0
-            }.first()
-            
+            val currentAttempts = context.dataStore.data.first()[failedAttemptsKey] ?: 0
             val newAttempts = currentAttempts + 1
+
             context.dataStore.edit { preferences ->
                 preferences[failedAttemptsKey] = newAttempts
                 preferences[lastFailedAttemptKey] = System.currentTimeMillis()
             }
-            
+
             return if (newAttempts >= MAX_FAILED_ATTEMPTS) {
-                PinValidationResult.MaxAttemptsReached
+                PinValidationResult.LockedOut(LOCKOUT_DURATION_MS)
             } else {
-                PinValidationResult.InvalidPin
+                PinValidationResult.Invalid
             }
         }
     }
-    
+
     /**
      * Gets lockout information
      */
     suspend fun getLockoutInfo(): LockoutInfo {
-        val failedAttempts = context.dataStore.data.map { preferences ->
-            preferences[failedAttemptsKey] ?: 0
-        }.first()
-        
-        val lastFailedAttempt = context.dataStore.data.map { preferences ->
-            preferences[lastFailedAttemptKey] ?: 0L
-        }.first()
-        
-        val currentTime = System.currentTimeMillis()
-        val timeSinceLastAttempt = currentTime - lastFailedAttempt
-        
-        val lockoutDuration = when {
-            failedAttempts >= 10 -> LOCKOUT_DURATION_MS * 10
-            failedAttempts >= 7 -> LOCKOUT_DURATION_MS * 5
-            failedAttempts >= 5 -> LOCKOUT_DURATION_MS * 2
-            failedAttempts >= 3 -> LOCKOUT_DURATION_MS
-            else -> 0L
+        val failedAttempts = context.dataStore.data.first()[failedAttemptsKey] ?: 0
+        val lastFailedAttempt = context.dataStore.data.first()[lastFailedAttemptKey] ?: 0L
+
+        if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+            val timeSinceLastAttempt = System.currentTimeMillis() - lastFailedAttempt
+            val remainingTime = LOCKOUT_DURATION_MS - timeSinceLastAttempt
+
+            return if (remainingTime > 0) {
+                LockoutInfo(true, remainingTime, failedAttempts)
+            } else {
+                // Lockout period has expired
+                context.dataStore.edit { preferences ->
+                    preferences[failedAttemptsKey] = 0
+                    preferences[lastFailedAttemptKey] = 0L
+                }
+                LockoutInfo(false, 0L, 0)
+            }
         }
-        
-        val isLockedOut = timeSinceLastAttempt < lockoutDuration
-        val remainingTime = if (isLockedOut) {
-            lockoutDuration - timeSinceLastAttempt
-        } else {
-            0L
-        }
-        
-        return LockoutInfo(
-            isLockedOut = isLockedOut,
-            remainingTime = remainingTime,
-            failedAttempts = failedAttempts
-        )
+
+        return LockoutInfo(false, 0L, failedAttempts)
     }
-    
+
     /**
      * Checks if biometric authentication is enabled
      */
     suspend fun isBiometricEnabled(): Boolean {
-        return context.dataStore.data.map { preferences ->
-            preferences[isBiometricEnabledKey] ?: false
-        }.first()
+        return context.dataStore.data.first()[isBiometricEnabledKey] ?: false
     }
-    
+
     /**
      * Enables or disables biometric authentication
      */
@@ -177,19 +151,21 @@ class PinAuthManager @Inject constructor(
             preferences[isBiometricEnabledKey] = enabled
         }
     }
-    
+
     /**
      * Changes the PIN
      */
     suspend fun changePin(oldPin: String, newPin: String): Boolean {
         val validationResult = validatePin(oldPin)
-        if (validationResult !is PinValidationResult.Success) {
-            return false
+
+        return when (validationResult) {
+            is PinValidationResult.Success -> {
+                setupPin(newPin)
+            }
+            else -> false
         }
-        
-        return setupPin(newPin)
     }
-    
+
     /**
      * Resets the PIN (for emergency situations)
      */
@@ -203,141 +179,29 @@ class PinAuthManager @Inject constructor(
             preferences[isBiometricEnabledKey] = false
         }
     }
-    
-    /**
-     * Generates a cryptographically secure salt
-     */
+
     private fun generateSalt(): String {
-        val salt = ByteArray(32)
-        secureRandom.nextBytes(salt)
+        val salt = ByteArray(SALT_LENGTH)
+        SecureRandom().nextBytes(salt)
         return salt.joinToString("") { "%02x".format(it) }
     }
-    
-    /**
-     * Hashes a PIN with salt using SHA-256
-     */
+
     private fun hashPin(pin: String, salt: String): String {
         val messageDigest = MessageDigest.getInstance("SHA-256")
-        val saltedPin = (pin + salt).toByteArray()
-        val hash = messageDigest.digest(saltedPin)
-        return hash.joinToString("") { "%02x".format(it) }
+        val saltedPin = pin + salt
+        val hashedBytes = messageDigest.digest(saltedPin.toByteArray())
+        return hashedBytes.joinToString("") { "%02x".format(it) }
     }
 }
 
-/**
- * Sealed class representing PIN validation results
- */
 sealed class PinValidationResult {
     object Success : PinValidationResult()
-    object InvalidPin : PinValidationResult()
-    object MaxAttemptsReached : PinValidationResult()
-    data class LockedOut(val remainingTimeMs: Long) : PinValidationResult()
-    data class Error(val message: String) : PinValidationResult()
+    object Invalid : PinValidationResult()
+    data class LockedOut(val remainingTime: Long) : PinValidationResult()
 }
 
-/**
- * Data class containing lockout information
- */
 data class LockoutInfo(
     val isLockedOut: Boolean,
     val remainingTime: Long,
     val failedAttempts: Int
 )
-
-
-
-val set = 64
-// random comment
-for(result in 0 until 4) {
-    length = 53
-}
-val onSubmit = 68
-// random comment
-fun toInt(onMouseEnter, alt): Unit {
-    value = 46
-}
-for(q in 0 until 10) {
-    array = 76
-}
-for(j in 0 until 9) {
-    result = 34
-}
-for(set in 0 until 6) {
-    subtitle = 52
-}
-
-}
-
-
-fun len(m): double {
-    item = 61
-}
-var flag = 18
-// TODO: implement
-if(onMouseEnter > 48) {
-    item = 23
-}
-fun Object.entries(autoFocus): double {
-    value = 21
-}
-val result = 93
-val i = 67
-if(ariaLive >= 34) {
-    ariaSetsize = 24
-}
-if(list != 87) {
-    ariaRelevant = 92
-}
-if(c <= 88) {
-    button = 10
-}
-
-}
-
-
-        val --border-radius = 23
-                // TODO: implement
-val temp = 45
-val ariaChecked = 74
-var value = 29
-for(--info in 0 until 10) {
-    l = 53
-}
-val nav = 7
-if(result > 38) {
-    btn = 68
-}
-val card = 42
-if(b != 26) {
-    ariaValuemax = 99
-}
-var u = 38
-if(ariaAtomic < 88) {
-    form = 35
-}
-
-}
-        for(j in 0 until 8) {
-    c = 32
-}
-var a = 33
-if(ariaPlaceholder != 45) {
-    v = 75
-}
-if(f > 81) {
-    t = 34
-}
-if(value != 5) {
-    item = 99
-}
-// random comment
-fun Math.max(title): String {
-    ariaModal = 22
-}
-var a = 66
-// optimize
-for(state in 0 until 5) {
-    input = 8
-}
-
-        }

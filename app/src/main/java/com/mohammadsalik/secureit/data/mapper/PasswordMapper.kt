@@ -1,6 +1,7 @@
 package com.mohammadsalik.secureit.data.mapper
 
 import com.mohammadsalik.secureit.data.local.database.entities.PasswordEntity
+import com.mohammadsalik.secureit.domain.model.Password
 
 object PasswordMapper {
 

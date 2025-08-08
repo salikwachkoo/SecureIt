@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mohammadsalik.secureit.presentation.auth.AuthViewModel
 import com.mohammadsalik.secureit.ui.theme.SecureItTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -35,7 +40,18 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SecureVaultApp() {
+    val viewModel: AuthViewModel = hiltViewModel()
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Welcome) }
+
+    // Determine initial screen based on authentication state
+    LaunchedEffect(authState) {
+        currentScreen = when {
+            !authState.isPinSet -> Screen.Welcome
+            !authState.isAuthenticated -> Screen.PinEntry
+            else -> Screen.MainVault
+        }
+    }
 
     when (currentScreen) {
         Screen.Welcome -> WelcomeScreen(
@@ -47,7 +63,12 @@ fun SecureVaultApp() {
         Screen.BiometricSetup -> BiometricSetupScreen(
             onBiometricSetupComplete = { currentScreen = Screen.MainVault }
         )
-        Screen.MainVault -> MainVaultScreen()
+        Screen.MainVault -> MainVaultScreen(
+            onLogout = {
+                viewModel.logout()
+                currentScreen = Screen.PinEntry
+            }
+        )
         Screen.PinEntry -> PinEntryScreen(
             onPinCorrect = { currentScreen = Screen.MainVault },
             onForgotPin = { currentScreen = Screen.Welcome }
@@ -417,28 +438,48 @@ fun NumberButton(
 }
 
 @Composable
-fun MainVaultScreen() {
+fun MainVaultScreen(onLogout: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(24.dp)
     ) {
+        // Header with logout button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "SecureVault",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            IconButton(onClick = onLogout) {
+                Icon(
+                    imageVector = Icons.Default.ExitToApp,
+                    contentDescription = "Logout"
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         Text(
-            text = "Welcome to SecureVault",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            text = "Your Personal Security Vault",
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Your vault is ready! This is where you'll manage your passwords, documents, and secure notes.",
+            text = "Welcome to your secure vault! Here you can store and manage your passwords, documents, and other sensitive information.",
             fontSize = 16.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
         )
 
         Spacer(modifier = Modifier.height(32.dp))

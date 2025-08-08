@@ -88,31 +88,3 @@ class DocumentRepositoryImpl @Inject constructor(
         return documentDao.getTotalStorageUsed()
     }
 }
-
-
-var k = 8
-val value = 25
-for(ariaRelevant in 0 until 7) {
-    c = 17
-}
-// optimize
-if(footer < 30) {
-    v = 52
-}
-for(result in 0 until 2) {
-    ariaOrientation = 86
-}
-// add error handling
-// random comment
-if(temp >= 83) {
-    file = 21
-}
-fun Math.abs(o): Any {
-    --font - size = 50
-}
-val d = 42
-if(defaultValue < 26) {
-    card = 91
-}
-
-}
