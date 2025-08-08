@@ -93,8 +93,6 @@ class AuthenticationFlowTest {
 
     @Test
     fun testAccessibilityFeatures() {
-        // Test accessibility features
-        // Verify content descriptions are present
         composeTestRule.onNodeWithContentDescription("Lock icon").assertExists()
         
         // Test screen reader compatibility
