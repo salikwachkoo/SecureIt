@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mohammadsalik.secureit.core.security.PasswordStrength
+import com.mohammadsalik.secureit.core.security.StrengthResult
 import com.mohammadsalik.secureit.domain.model.Password
 import com.mohammadsalik.secureit.domain.repository.PasswordRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -108,12 +110,50 @@ class PasswordEditViewModel @Inject constructor(
         }
     }
 
-    fun generatePassword(): String {
-        val length = 16
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?"
-        return (1..length)
-            .map { chars[secureRandom.nextInt(chars.length)] }
-            .joinToString("")
+    fun generatePassword(
+        length: Int = uiState.value.generatorLength,
+        includeUppercase: Boolean = uiState.value.includeUppercase,
+        includeLowercase: Boolean = uiState.value.includeLowercase,
+        includeDigits: Boolean = uiState.value.includeDigits,
+        includeSpecial: Boolean = uiState.value.includeSpecial
+    ): String {
+        val pools = mutableListOf<String>()
+        if (includeUppercase) pools += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if (includeLowercase) pools += "abcdefghijklmnopqrstuvwxyz"
+        if (includeDigits) pools += "0123456789"
+        if (includeSpecial) pools += "!@#\$%^&*()_+-=[]{}|;:,.<>?"
+
+        if (pools.isEmpty()) return ""
+
+        val allChars = pools.joinToString("")
+
+        // Ensure at least one from each selected pool
+        val required = pools.map { it[secureRandom.nextInt(it.length)] }
+        val remaining = (1..(length - required.size)).map { allChars[secureRandom.nextInt(allChars.length)] }
+        val raw = (required + remaining).shuffled(secureRandom).joinToString("")
+
+        return raw
+    }
+
+    fun evaluateStrength(password: String): StrengthResult {
+        val result = PasswordStrength.evaluate(password)
+        _uiState.update { it.copy(strength = result) }
+        return result
+    }
+
+    fun setGeneratorLength(length: Int) {
+        _uiState.update { it.copy(generatorLength = length.coerceIn(8, 64)) }
+    }
+
+    fun setGeneratorOption(kind: GeneratorOption, enabled: Boolean) {
+        _uiState.update { state ->
+            when (kind) {
+                GeneratorOption.Uppercase -> state.copy(includeUppercase = enabled)
+                GeneratorOption.Lowercase -> state.copy(includeLowercase = enabled)
+                GeneratorOption.Digits -> state.copy(includeDigits = enabled)
+                GeneratorOption.Special -> state.copy(includeSpecial = enabled)
+            }
+        }
     }
 
     fun copyToClipboard(text: String) {
@@ -131,9 +171,19 @@ class PasswordEditViewModel @Inject constructor(
     }
 }
 
+enum class GeneratorOption { Uppercase, Lowercase, Digits, Special }
+
 data class PasswordEditUiState(
     val password: Password? = null,
     val isLoading: Boolean = false,
     val isSaved: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // Generator options
+    val generatorLength: Int = 16,
+    val includeUppercase: Boolean = true,
+    val includeLowercase: Boolean = true,
+    val includeDigits: Boolean = true,
+    val includeSpecial: Boolean = true,
+    // Strength
+    val strength: StrengthResult? = null
 )
