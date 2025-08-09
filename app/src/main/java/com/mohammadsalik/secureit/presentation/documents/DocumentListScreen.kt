@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import com.mohammadsalik.secureit.domain.model.Document
 fun DocumentListScreen(
     onDocumentClick: (Document) -> Unit,
     onAddDocument: () -> Unit,
+    onBack: () -> Unit,
     viewModel: DocumentListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -36,6 +38,9 @@ fun DocumentListScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Documents") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                },
                 actions = {
                     IconButton(onClick = { showSearch = !showSearch }) {
                         Icon(

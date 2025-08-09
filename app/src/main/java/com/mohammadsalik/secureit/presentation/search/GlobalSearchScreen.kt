@@ -1,10 +1,12 @@
 package com.mohammadsalik.secureit.presentation.search
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,22 +29,23 @@ fun GlobalSearchScreen(
     onAddPassword: () -> Unit,
     onAddDocument: () -> Unit,
     onAddNote: () -> Unit,
+    onBack: () -> Unit,
     viewModel: GlobalSearchViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var searchQuery by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
 
-    LaunchedEffect(searchQuery) {
-        viewModel.searchAll(searchQuery)
-    }
+    LaunchedEffect(searchQuery) { viewModel.searchAll(searchQuery) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Search") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
                 actions = {
-                    IconButton(onClick = { /* TODO: Filter options */ }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                    IconButton(onClick = { viewModel.clearHistory() }) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear history")
                     }
                 }
             )
@@ -53,19 +56,76 @@ fun GlobalSearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Search bar
+            // Search bar + history suggestions
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = { Text("Search passwords, documents, and notes...") },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null)
-                },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
                 singleLine = true
             )
+            if (searchQuery.isBlank() && uiState.history.isNotEmpty()) {
+                AssistChip(onClick = {}, label = { Text("Recent searches") }, leadingIcon = {
+                    Icon(Icons.Default.History, contentDescription = null)
+                })
+                LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                    items(uiState.history) { q ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { searchQuery = q }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Spacer(Modifier.width(8.dp))
+                            Text(q)
+                        }
+                    }
+                }
+            }
+
+            // Filters
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = uiState.filters.includePasswords,
+                        onClick = { viewModel.updateFilters(uiState.filters.copy(includePasswords = !uiState.filters.includePasswords)) },
+                        label = { Text("Passwords") }
+                    )
+                    FilterChip(
+                        selected = uiState.filters.includeDocuments,
+                        onClick = { viewModel.updateFilters(uiState.filters.copy(includeDocuments = !uiState.filters.includeDocuments)) },
+                        label = { Text("Documents") }
+                    )
+                    FilterChip(
+                        selected = uiState.filters.includeNotes,
+                        onClick = { viewModel.updateFilters(uiState.filters.copy(includeNotes = !uiState.filters.includeNotes)) },
+                        label = { Text("Notes") }
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AssistChip(
+                        onClick = { viewModel.updateFilters(uiState.filters.copy(favoritesOnly = !uiState.filters.favoritesOnly)) },
+                        label = { Text(if (uiState.filters.favoritesOnly) "Favorites only" else "All items") },
+                        leadingIcon = { Icon(Icons.Default.Favorite, contentDescription = null) }
+                    )
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = {
+                            category = it
+                            viewModel.updateFilters(uiState.filters.copy(category = it.ifBlank { null }))
+                        },
+                        label = { Text("Category") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
 
             // Search results
             when {
@@ -73,38 +133,16 @@ fun GlobalSearchScreen(
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    ) { CircularProgressIndicator() }
                 }
                 searchQuery.isBlank() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Search Your Vault",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                            )
+                            Text(text = "Search Your Vault", fontSize = 18.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Search across all your passwords, documents, and notes",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
+                            Text(text = "Search across all your passwords, documents, and notes", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
                     }
                 }
@@ -113,29 +151,12 @@ fun GlobalSearchScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SearchOff,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(imageVector = Icons.Default.SearchOff, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No results found",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                            )
+                            Text(text = "No results found", fontSize = 18.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Try different keywords or check your spelling",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
+                            Text(text = "Try different keywords or adjust filters", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
                     }
                 }

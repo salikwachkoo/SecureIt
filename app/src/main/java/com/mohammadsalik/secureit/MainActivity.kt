@@ -27,6 +27,8 @@ import com.mohammadsalik.secureit.presentation.notes.SecureNoteEditScreen
 import com.mohammadsalik.secureit.presentation.search.GlobalSearchScreen
 import com.mohammadsalik.secureit.core.security.SecurityManager
 import com.mohammadsalik.secureit.ui.theme.SecureItTheme
+import com.mohammadsalik.secureit.presentation.settings.SettingsScreen
+import com.mohammadsalik.secureit.presentation.settings.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,14 +42,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         
         setContent {
-            SecureItTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    SecureVaultApp()
-                }
-            }
+            AppRoot()
         }
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -87,6 +82,25 @@ class MainActivity : ComponentActivity() {
         android.util.Log.w("MainActivity", "Security warning: Device may be compromised")
         // In a real app, you might show a dialog or finish the activity
         // finish()
+    }
+}
+
+@Composable
+fun AppRoot() {
+    val settingsViewModel: SettingsViewModel = hiltViewModel()
+    val settings by settingsViewModel.uiState.collectAsState()
+
+    SecureItTheme(
+        themeMode = settings.themeMode,
+        dynamicColor = settings.dynamicColor,
+        textScale = settings.textScale
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            SecureVaultApp()
+        }
     }
 }
 
@@ -135,7 +149,9 @@ fun SecureVaultApp() {
                 viewModel.logout()
                 currentScreen = Screen.PinEntry
                 navigationStack = emptyList()
-            }
+            },
+            onNavigateToSettings = { navigateTo(Screen.Settings) },
+            onNavigateToSearch = { navigateTo(Screen.GlobalSearch) }
         )
         Screen.PinEntry -> PinEntryScreen(
             onPinCorrect = { currentScreen = Screen.MainVault },
@@ -143,7 +159,8 @@ fun SecureVaultApp() {
         )
         Screen.PasswordList -> PasswordListScreen(
             onPasswordClick = { navigateTo(Screen.PasswordEdit) },
-            onAddPassword = { navigateTo(Screen.PasswordEdit) }
+            onAddPassword = { navigateTo(Screen.PasswordEdit) },
+            onBack = { navigateBack() }
         )
         Screen.PasswordEdit -> PasswordEditScreen(
             onSave = { navigateBack() },
@@ -151,7 +168,8 @@ fun SecureVaultApp() {
         )
         Screen.DocumentList -> DocumentListScreen(
             onDocumentClick = { /* TODO: Document detail view */ },
-            onAddDocument = { navigateTo(Screen.DocumentUpload) }
+            onAddDocument = { navigateTo(Screen.DocumentUpload) },
+            onBack = { navigateBack() }
         )
         Screen.DocumentUpload -> DocumentUploadScreen(
             onUploadComplete = { navigateBack() },
@@ -159,7 +177,8 @@ fun SecureVaultApp() {
         )
         Screen.NoteList -> SecureNoteListScreen(
             onNoteClick = { navigateTo(Screen.NoteEdit) },
-            onAddNote = { navigateTo(Screen.NoteEdit) }
+            onAddNote = { navigateTo(Screen.NoteEdit) },
+            onBack = { navigateBack() }
         )
         Screen.NoteEdit -> SecureNoteEditScreen(
             onSave = { navigateBack() },
@@ -171,8 +190,10 @@ fun SecureVaultApp() {
             onNoteClick = { navigateTo(Screen.NoteEdit) },
             onAddPassword = { navigateTo(Screen.PasswordEdit) },
             onAddDocument = { navigateTo(Screen.DocumentUpload) },
-            onAddNote = { navigateTo(Screen.NoteEdit) }
+            onAddNote = { navigateTo(Screen.NoteEdit) },
+            onBack = { navigateBack() }
         )
+        Screen.Settings -> SettingsScreen(onBack = { navigateBack() })
     }
 }
 
@@ -189,6 +210,7 @@ sealed class Screen {
     object NoteList : Screen()
     object NoteEdit : Screen()
     object GlobalSearch : Screen()
+    object Settings : Screen()
 }
 
 @Composable
