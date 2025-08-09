@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
+import androidx.biometric.BiometricManager
 
 @Composable
 fun BiometricSetupScreen(
@@ -114,88 +114,65 @@ fun BiometricSetupScreen(
 
         // Action buttons
         if (biometricSetupState.isBiometricAvailable) {
-            if (biometricSetupState.isBiometricEnabled) {
-                // Biometric is enabled - show test and continue options
-                Column(
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val activity = ctx as? androidx.fragment.app.FragmentActivity
+
+            // Single switch that triggers enrollment or enables/disables fingerprint only
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = { viewModel.authenticateWithBiometric() },
-                        enabled = !biometricSetupState.isTestingBiometric,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (biometricSetupState.isTestingBiometric) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Fingerprint, //Fingerprint
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Test Biometric")
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = { onBiometricSetupComplete() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Continue to Vault")
-                    }
-
-                    TextButton(
-                        onClick = {
-                            viewModel.setupBiometric(false)
+                    Text(text = "Enable fingerprint unlock")
+                    var toggling by remember { mutableStateOf(false) }
+                    Switch(
+                        checked = biometricSetupState.isBiometricEnabled,
+                        onCheckedChange = { checked ->
+                            if (activity != null) {
+                                // If turning on, ensure enrollment; otherwise disable directly
+                                val mgr = com.mohammadsalik.secureit.core.security.BiometricAuthManager(ctx)
+                                when (mgr.canAuthenticateStatus()) {
+                                    BiometricManager.BIOMETRIC_SUCCESS -> {
+                                        viewModel.setupBiometric(checked)
+                                    }
+                                    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                                        // open enrollment UI
+                                        mgr.launchBiometricEnrollment(activity)
+                                        // Keep switch off until user returns and re-checks
+                                    }
+                                    else -> {
+                                        // hardware unavailable or not supported, keep switch off
+                                        viewModel.setupBiometric(false)
+                                    }
+                                }
+                            }
                         },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Disable Biometric")
-                    }
+                        enabled = !biometricSetupState.isLoading
+                    )
                 }
-            } else {
-                // Biometric is not enabled - show enable option
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Button(
-                        onClick = { viewModel.setupBiometric(true) },
-                        enabled = !biometricSetupState.isLoading,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (biometricSetupState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Security, //Security
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Enable Biometric")
-                        }
-                    }
 
-                    OutlinedButton(
-                        onClick = { showSkipDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Skip for Now")
-                    }
+                OutlinedButton(
+                    onClick = { onBiometricSetupComplete() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Continue")
+                }
+
+                TextButton(
+                    onClick = { showSkipDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Skip for now")
                 }
             }
         } else {

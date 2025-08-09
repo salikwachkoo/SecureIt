@@ -25,15 +25,15 @@ class BiometricAuthManager @Inject constructor(
      * Checks if biometric authentication is available on the device
      */
     fun isBiometricAvailable(): Boolean {
-        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
     }
 
     fun canAuthenticateStatus(): Int {
-        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
     }
 
     fun isEnrollmentRequired(): Boolean {
-        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
     }
 
     /**
@@ -66,6 +66,7 @@ class BiometricAuthManager @Inject constructor(
                 .setTitle(title)
                 .setSubtitle(subtitle)
                 .setNegativeButtonText(negativeButtonText)
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 .build()
 
             val biometricPrompt = BiometricPrompt(activity, object : BiometricPrompt.AuthenticationCallback() {
@@ -101,6 +102,7 @@ class BiometricAuthManager @Inject constructor(
                 .setTitle(title)
                 .setSubtitle(subtitle)
                 .setNegativeButtonText(negativeButtonText)
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 .build()
 
             val biometricPrompt = BiometricPrompt(activity, object : BiometricPrompt.AuthenticationCallback() {
@@ -133,7 +135,7 @@ class BiometricAuthManager @Inject constructor(
             val enrollIntent = Intent(Settings.ACTION_BIOMETRIC_ENROLL).apply {
                 putExtra(
                     Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED,
-                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG
                 )
             }
             activity.startActivity(enrollIntent)

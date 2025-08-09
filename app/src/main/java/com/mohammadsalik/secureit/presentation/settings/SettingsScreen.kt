@@ -10,6 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mohammadsalik.secureit.core.preferences.ThemeMode
+import androidx.biometric.BiometricManager
+import androidx.compose.material.icons.filled.Fingerprint
+import com.mohammadsalik.secureit.core.security.BiometricAuthManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +76,34 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Reduce motion", modifier = Modifier.weight(1f))
                 Switch(checked = uiState.reduceMotion, onCheckedChange = { viewModel.setReduceMotion(it) })
+            }
+
+            Divider()
+            Text("Security", style = MaterialTheme.typography.titleMedium)
+
+            // Fingerprint toggle + enrollment
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val mgr = remember { BiometricAuthManager(ctx) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Fingerprint, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Fingerprint unlock")
+                }
+                Switch(
+                    checked = uiState.fingerprintEnabled,
+                    onCheckedChange = { checked ->
+                        when (mgr.canAuthenticateStatus()) {
+                            BiometricManager.BIOMETRIC_SUCCESS -> viewModel.setFingerprintEnabled(checked)
+                            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                                if (checked && ctx is androidx.fragment.app.FragmentActivity) {
+                                    mgr.launchBiometricEnrollment(ctx)
+                                }
+                            }
+                            else -> { /* hardware unavailable, ignore */ }
+                        }
+                    }
+                )
             }
         }
     }
