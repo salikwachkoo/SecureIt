@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -20,6 +21,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import androidx.fragment.app.FragmentActivity
+import androidx.biometric.BiometricManager
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.mohammadsalik.secureit.core.security.BiometricAuthManager
+import com.mohammadsalik.secureit.core.security.BiometricResult
 
 @Composable
 fun PinEntryScreen(
@@ -28,20 +35,41 @@ fun PinEntryScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val bioState by viewModel.biometricSetupState.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    val activity = ctx as? FragmentActivity
+
+    // Auto biometric on entry if enabled and available. If not enrolled, deep link to enroll.
+    LaunchedEffect(authState.isBiometricEnabled) {
+        if (activity != null && authState.isBiometricEnabled) {
+            viewModel.checkBiometricAvailability()
+            val mgr = BiometricAuthManager(ctx)
+            when (mgr.canAuthenticateStatus()) {
+                BiometricManager.BIOMETRIC_SUCCESS -> {
+                    when (mgr.authenticate(activity)) {
+                        is BiometricResult.Success -> { viewModel.onBiometricSuccess(); onPinCorrect() }
+                        else -> { /* stay on PIN screen */ }
+                    }
+                }
+                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                    // Prompt user to enroll biometrics in system settings
+                    mgr.launchBiometricEnrollment(activity)
+                }
+                else -> { /* not available or hardware unavailable */ }
+            }
+        }
+    }
+
     var pin by remember { mutableStateOf("") }
     var showPin by remember { mutableStateOf(false) }
     var showForgotPinDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(authState.isAuthenticated) {
-        if (authState.isAuthenticated) {
-            onPinCorrect()
-        }
-    }
+    var showError by remember { mutableStateOf(false) }
 
     LaunchedEffect(authState.pinError) {
         if (authState.pinError != null) {
             // Clear PIN on error
             pin = ""
+            showError = true
             // Clear error after a delay
             delay(3000)
             viewModel.clearPinError()
@@ -113,10 +141,10 @@ fun PinEntryScreen(
         )
 
         // Error Message
-        if (authState.pinError != null) {
+        if (showError || authState.pinError != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = authState.pinError!!,
+                text = authState.pinError ?: "Incorrect PIN",
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -181,6 +209,26 @@ fun PinEntryScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Manual Biometric Button
+        if (activity != null && authState.isBiometricEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val scope = rememberCoroutineScope()
+            OutlinedButton(onClick = {
+                val mgr = BiometricAuthManager(ctx)
+                when (mgr.canAuthenticateStatus()) {
+                    BiometricManager.BIOMETRIC_SUCCESS -> {
+                        scope.launch {
+                            when (mgr.authenticate(activity)) {
+                                is BiometricResult.Success -> { viewModel.onBiometricSuccess(); onPinCorrect() }
+                                else -> { /* ignore */ }
+                            }
+                        }
+                    }
+                    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> mgr.launchBiometricEnrollment(activity)
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Use biometric") }
+        }
 
         // Forgot PIN Button
         TextButton(

@@ -4,19 +4,20 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mohammadsalik.secureit.presentation.auth.AuthViewModel
+import com.mohammadsalik.secureit.presentation.auth.PinEntryScreen
 import com.mohammadsalik.secureit.presentation.vault.VaultDashboardScreen
 import com.mohammadsalik.secureit.presentation.passwords.PasswordListScreen
 import com.mohammadsalik.secureit.presentation.passwords.PasswordEditScreen
@@ -36,57 +37,27 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.mohammadsalik.secureit.presentation.documents.DocumentViewerScreen
 import com.mohammadsalik.secureit.presentation.documents.DocumentFullScreenPager
-import androidx.activity.compose.BackHandler
-import androidx.compose.ui.platform.LocalContext
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
-        setContent {
-            AppRoot()
-        }
-
+        setContent { AppRoot() }
         CoroutineScope(Dispatchers.Main).launch {
             delay(1000)
             try {
                 SecurityManager.initializeSecurity(this@MainActivity)
-                val securityStatus = SecurityManager.performSecurityCheck(this@MainActivity)
-
-                if (SecurityManager.shouldBlockApp(this@MainActivity)) {
-                    showSecurityWarning()
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("MainActivity", "Security initialization failed: ${e.message}")
-            }
+                SecurityManager.performSecurityCheck(this@MainActivity)
+            } catch (_: Exception) {}
         }
     }
-    
+
     override fun onResume() {
         super.onResume()
-        try {
-            SecurityManager.enableSecurityProtection(this)
-        } catch (e: Exception) {
-            android.util.Log.w("MainActivity", "Error enabling security protection: ${e.message}")
-        }
+        try { SecurityManager.enableSecurityProtection(this) } catch (_: Exception) {}
     }
-    
-    override fun onPause() {
-        super.onPause()
-        try {
-            SecurityManager.disableSecurityProtection(this)
-        } catch (e: Exception) {
-            android.util.Log.w("MainActivity", "Error disabling security protection: ${e.message}")
-        }
-    }
-    
-    private fun showSecurityWarning() {
-        android.util.Log.w("MainActivity", "Security warning: Device may be compromised")
-        // In a real app, you might show a dialog or finish the activity
-        // finish()
-    }
+    override fun onPause() { super.onPause(); try { SecurityManager.disableSecurityProtection(this) } catch (_: Exception) {} }
 }
 
 @Composable
@@ -118,7 +89,11 @@ fun SecureVaultApp() {
 
     LaunchedEffect(authState) {
         currentScreen = when {
+            // If no PIN yet, show onboarding welcome
             !authState.isPinSet -> Screen.Welcome
+            // If PIN set but onboarding not completed, force biometric setup step
+            authState.isPinSet && !authState.isOnboardingCompleted -> Screen.BiometricSetup
+            // After onboarding, require PIN every time unless authenticated session active
             !authState.isAuthenticated -> Screen.PinEntry
             else -> Screen.MainVault
         }
@@ -154,7 +129,9 @@ fun SecureVaultApp() {
             onPinSetupComplete = { currentScreen = Screen.BiometricSetup }
         )
         Screen.BiometricSetup -> BiometricSetupScreen(
-            onBiometricSetupComplete = { currentScreen = Screen.MainVault }
+            onBiometricSetupComplete = {
+                currentScreen = Screen.PinEntry
+            }
         )
         Screen.MainVault -> VaultDashboardScreen(
             onNavigateToPasswords = { navigateTo(Screen.PasswordList) },
@@ -288,9 +265,16 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 
 @Composable
 fun PinSetupScreen(onPinSetupComplete: () -> Unit) {
+    val authViewModel: AuthViewModel = hiltViewModel()
+    val pinState by authViewModel.pinSetupState.collectAsStateWithLifecycle()
     var pin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
+
+    // Navigate forward when PIN saved
+    LaunchedEffect(pinState.isPinSet) {
+        if (pinState.isPinSet) onPinSetupComplete()
+    }
 
     Column(
         modifier = Modifier
@@ -317,13 +301,11 @@ fun PinSetupScreen(onPinSetupComplete: () -> Unit) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // PIN Input Fields
         OutlinedTextField(
             value = pin,
             onValueChange = {
                 if (it.length <= 4 && it.all { char -> char.isDigit() }) {
-                    pin = it
-                    showError = false
+                    pin = it; showError = false
                 }
             },
             label = { Text("Enter 4-digit PIN") },
@@ -340,8 +322,7 @@ fun PinSetupScreen(onPinSetupComplete: () -> Unit) {
             value = confirmPin,
             onValueChange = {
                 if (it.length <= 4 && it.all { char -> char.isDigit() }) {
-                    confirmPin = it
-                    showError = false
+                    confirmPin = it; showError = false
                 }
             },
             label = { Text("Confirm PIN") },
@@ -354,7 +335,7 @@ fun PinSetupScreen(onPinSetupComplete: () -> Unit) {
         )
 
         if (showError) {
-            Text(
+    Text(
                 text = "PINs do not match",
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 12.sp,
@@ -362,12 +343,17 @@ fun PinSetupScreen(onPinSetupComplete: () -> Unit) {
             )
         }
 
+        if (pinState.isLoading) {
+            Spacer(modifier = Modifier.height(16.dp))
+            CircularProgressIndicator()
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(
             onClick = {
                 if (pin == confirmPin && pin.length == 4) {
-                    onPinSetupComplete()
+                    authViewModel.setupPin(pin)
                 } else {
                     showError = true
                 }
@@ -375,15 +361,16 @@ fun PinSetupScreen(onPinSetupComplete: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            enabled = pin.length == 4 && confirmPin.length == 4
+            enabled = pin.length == 4 && confirmPin.length == 4 && !pinState.isLoading
         ) {
-            Text("Create Vault", fontSize = 18.sp)
+            Text("Save PIN", fontSize = 18.sp)
         }
     }
 }
 
 @Composable
 fun BiometricSetupScreen(onBiometricSetupComplete: () -> Unit) {
+    val authViewModel: AuthViewModel = hiltViewModel()
     var biometricEnabled by remember { mutableStateOf(false) }
 
     Column(
@@ -416,21 +403,17 @@ fun BiometricSetupScreen(onBiometricSetupComplete: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Enable Biometric/Facial Recognition",
-                fontSize = 16.sp
-            )
-
-            Switch(
-                checked = biometricEnabled,
-                onCheckedChange = { biometricEnabled = it }
-            )
+            Text(text = "Enable Biometric/Facial Recognition", fontSize = 16.sp)
+            Switch(checked = biometricEnabled, onCheckedChange = { biometricEnabled = it })
         }
 
         Spacer(modifier = Modifier.height(48.dp))
 
         Button(
-            onClick = onBiometricSetupComplete,
+            onClick = {
+                authViewModel.setupBiometric(biometricEnabled)
+                onBiometricSetupComplete()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
@@ -441,7 +424,10 @@ fun BiometricSetupScreen(onBiometricSetupComplete: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
 
         TextButton(
-            onClick = onBiometricSetupComplete,
+            onClick = {
+                authViewModel.setupBiometric(false)
+                onBiometricSetupComplete()
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Skip for now", fontSize = 16.sp)
@@ -449,146 +435,4 @@ fun BiometricSetupScreen(onBiometricSetupComplete: () -> Unit) {
     }
 }
 
-@Composable
-fun PinEntryScreen(
-    onPinCorrect: () -> Unit,
-    onForgotPin: () -> Unit
-) {
-    var pin by remember { mutableStateOf("") }
-    var showError by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "Enter your PIN",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // PIN Display
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            repeat(4) { index ->
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (index < pin.length) "●" else "",
-                        fontSize = 24.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (showError) {
-            Text(
-                text = "Incorrect PIN",
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 14.sp
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Number Pad
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            repeat(3) { row ->
-                Row {
-                    repeat(3) { col ->
-                        val number = row * 3 + col + 1
-                        NumberButton(
-                            number = number.toString(),
-                            onClick = {
-                                if (pin.length < 4) {
-                                    pin += number.toString()
-                                    showError = false
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            Row {
-                NumberButton(
-                    number = "0",
-                    onClick = {
-                        if (pin.length < 4) {
-                            pin += "0"
-                            showError = false
-                        }
-                    }
-                )
-
-                NumberButton(
-                    number = "⌫",
-                    onClick = {
-                        if (pin.isNotEmpty()) {
-                            pin = pin.dropLast(1)
-                            showError = false
-                        }
-                    }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        TextButton(
-            onClick = onForgotPin,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Forgot PIN?", fontSize = 16.sp)
-        }
-
-        // Auto-submit when PIN is complete
-        LaunchedEffect(pin) {
-            if (pin.length == 4) {
-                // Simulate PIN validation
-                if (pin == "1234") {
-                    onPinCorrect()
-                } else {
-                    showError = true
-                    pin = ""
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun NumberButton(
-    number: String,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .size(80.dp)
-            .padding(4.dp),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Text(
-            text = number,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
+// Removed local PinEntryScreen and NumberButton; using presentation.auth.PinEntryScreen which validates via AuthViewModel

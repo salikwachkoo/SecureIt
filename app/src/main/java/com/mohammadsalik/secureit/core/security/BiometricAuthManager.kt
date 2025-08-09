@@ -1,6 +1,9 @@
 package com.mohammadsalik.secureit.core.security
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
@@ -23,6 +26,14 @@ class BiometricAuthManager @Inject constructor(
      */
     fun isBiometricAvailable(): Boolean {
         return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+
+    fun canAuthenticateStatus(): Int {
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+    }
+
+    fun isEnrollmentRequired(): Boolean {
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
     }
 
     /**
@@ -115,6 +126,20 @@ class BiometricAuthManager @Inject constructor(
      */
     fun createCryptoObject(cipher: Cipher): BiometricPrompt.CryptoObject {
         return BiometricPrompt.CryptoObject(cipher)
+    }
+
+    fun launchBiometricEnrollment(activity: FragmentActivity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val enrollIntent = Intent(Settings.ACTION_BIOMETRIC_ENROLL).apply {
+                putExtra(
+                    Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED,
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+                )
+            }
+            activity.startActivity(enrollIntent)
+        } else {
+            activity.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+        }
     }
 }
 
