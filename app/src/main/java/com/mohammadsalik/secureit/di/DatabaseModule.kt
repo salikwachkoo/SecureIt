@@ -21,6 +21,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import com.mohammadsalik.secureit.core.audit.AuditLogger
+import com.mohammadsalik.secureit.core.audit.LogcatAuditLogger
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -95,4 +97,8 @@ object DatabaseModule {
     ): SecureNoteRepository {
         return SecureNoteRepositoryImpl(secureNoteDao)
     }
+
+    @Provides
+    @Singleton
+    fun provideAuditLogger(): AuditLogger = LogcatAuditLogger()
 }

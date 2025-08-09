@@ -159,7 +159,7 @@ fun SecureNoteListScreen(
                             SecureNoteItem(
                                 note = note,
                                 onClick = { onNoteClick(note) },
-                                onFavoriteToggle = { viewModel.toggleFavorite(note) }
+                                onDelete = { viewModel.deleteNote(note) }
                             )
                         }
                     }
@@ -174,71 +174,22 @@ fun SecureNoteListScreen(
 fun SecureNoteItem(
     note: SecureNote,
     onClick: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onDelete: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
-            ) {
-                // Note icon
-                Icon(
-                    imageVector = Icons.Default.Note,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Icon(imageVector = Icons.Default.Note, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(16.dp))
-
-                // Note details
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = note.title,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = note.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = note.content.take(100) + if (note.content.length > 100) "..." else "",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 2
-                    )
+                    Text(text = note.content.take(100) + if (note.content.length > 100) "..." else "", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), maxLines = 2)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Last modified: ${formatDate(note.updatedAt)}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    if (note.category.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        AssistChip(
-                            onClick = { },
-                            label = { Text(note.category) }
-                        )
-                    }
+                    Text(text = "Last modified: ${formatDate(note.updatedAt)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    if (note.category.isNotBlank()) { Spacer(modifier = Modifier.height(4.dp)); AssistChip(onClick = {}, label = { Text(note.category) }) }
                 }
-
-                // Favorite button
-                IconButton(onClick = onFavoriteToggle) {
-                    Icon(
-                        imageVector = if (note.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (note.isFavorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (note.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
             }
         }
     }

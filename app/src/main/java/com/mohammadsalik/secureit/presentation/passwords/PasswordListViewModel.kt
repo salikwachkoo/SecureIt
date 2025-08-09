@@ -98,35 +98,20 @@ class PasswordListViewModel @Inject constructor(
         }
     }
 
-    fun toggleFavorite(password: Password) {
+    fun deletePassword(password: Password) {
         viewModelScope.launch {
             try {
-                val updatedPassword = password.toggleFavorite()
-                passwordRepository.updatePassword(updatedPassword)
-                
-                // Update the password in the current list
-                val currentPasswords = _uiState.value.passwords.toMutableList()
-                val index = currentPasswords.indexOfFirst { it.id == password.id }
-                if (index != -1) {
-                    currentPasswords[index] = updatedPassword
-                    _uiState.update { it.copy(passwords = currentPasswords) }
-                }
+                passwordRepository.deletePassword(password)
+                val remaining = _uiState.value.passwords.filter { it.id != password.id }
+                _uiState.update { it.copy(passwords = remaining) }
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to update password")
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to delete password") }
             }
         }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
-    fun refresh() {
-        loadPasswords()
-        loadCategories()
-    }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun refresh() { loadPasswords(); loadCategories() }
 }
 
 data class PasswordListUiState(

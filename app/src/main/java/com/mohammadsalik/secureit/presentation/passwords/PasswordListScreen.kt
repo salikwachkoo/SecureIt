@@ -158,7 +158,7 @@ fun PasswordListScreen(
                             PasswordItem(
                                 password = password,
                                 onClick = { onPasswordClick(password) },
-                                onFavoriteToggle = { viewModel.toggleFavorite(password) }
+                                onDelete = { viewModel.deletePassword(password) }
                             )
                         }
                     }
@@ -173,69 +173,20 @@ fun PasswordListScreen(
 fun PasswordItem(
     password: Password,
     onClick: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onDelete: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Website icon or default icon
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.width(16.dp))
-
-            // Password details
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = password.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = password.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = password.username,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-                if (password.website.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = password.website,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                if (password.category.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    AssistChip(
-                        onClick = { },
-                        label = { Text(password.category) }
-                    )
-                }
+                Text(text = password.username, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                if (password.website.isNotBlank()) { Spacer(modifier = Modifier.height(2.dp)); Text(text = password.website, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
+                if (password.category.isNotBlank()) { Spacer(modifier = Modifier.height(4.dp)); AssistChip(onClick = {}, label = { Text(password.category) }) }
             }
-
-            // Favorite button
-            IconButton(onClick = onFavoriteToggle) {
-                Icon(
-                    imageVector = if (password.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (password.isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (password.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
         }
     }
 }

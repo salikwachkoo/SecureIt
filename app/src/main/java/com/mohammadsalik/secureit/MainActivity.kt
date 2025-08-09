@@ -34,6 +34,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import com.mohammadsalik.secureit.presentation.documents.DocumentViewerScreen
+import com.mohammadsalik.secureit.presentation.documents.DocumentFullScreenPager
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -110,6 +114,7 @@ fun SecureVaultApp() {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Welcome) }
     var navigationStack by remember { mutableStateOf(listOf<Screen>()) }
+    var showExitDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(authState) {
         currentScreen = when {
@@ -119,19 +124,29 @@ fun SecureVaultApp() {
         }
     }
 
-    fun navigateTo(screen: Screen) {
-        navigationStack = navigationStack + currentScreen
-        currentScreen = screen
-    }
+    fun navigateTo(screen: Screen) { navigationStack = navigationStack + currentScreen; currentScreen = screen }
+    fun navigateBack() { if (navigationStack.isNotEmpty()) { currentScreen = navigationStack.last(); navigationStack = navigationStack.dropLast(1) } }
 
-    fun navigateBack() {
-        if (navigationStack.isNotEmpty()) {
-            currentScreen = navigationStack.last()
-            navigationStack = navigationStack.dropLast(1)
+    BackHandler {
+        if (currentScreen == Screen.MainVault) {
+            showExitDialog = true
+        } else {
+            navigateBack()
         }
     }
 
-    when (currentScreen) {
+    if (showExitDialog) {
+        val ctx = LocalContext.current
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            confirmButton = { TextButton(onClick = { showExitDialog = false; (ctx as? ComponentActivity)?.finish() }) { Text("Exit") } },
+            dismissButton = { TextButton(onClick = { showExitDialog = false }) { Text("Cancel") } },
+            title = { Text("Exit App") },
+            text = { Text("Are you sure you want to exit?") }
+        )
+    }
+
+    when (val screen = currentScreen) {
         Screen.Welcome -> WelcomeScreen(
             onContinue = { currentScreen = Screen.PinSetup }
         )
@@ -167,13 +182,23 @@ fun SecureVaultApp() {
             onCancel = { navigateBack() }
         )
         Screen.DocumentList -> DocumentListScreen(
-            onDocumentClick = { /* TODO: Document detail view */ },
+            onDocumentClick = { docId -> navigateTo(Screen.DocumentViewer(docId)) },
             onAddDocument = { navigateTo(Screen.DocumentUpload) },
             onBack = { navigateBack() }
         )
         Screen.DocumentUpload -> DocumentUploadScreen(
             onUploadComplete = { navigateBack() },
             onCancel = { navigateBack() }
+        )
+        is Screen.DocumentViewer -> DocumentViewerScreen(
+            documentId = screen.id,
+            onBack = { navigateBack() },
+            onOpenFullScreen = { page -> navigateTo(Screen.DocumentFullScreen(screen.id, page)) }
+        )
+        is Screen.DocumentFullScreen -> DocumentFullScreenPager(
+            documentId = screen.documentId,
+            startPage = screen.page,
+            onBack = { navigateBack() }
         )
         Screen.NoteList -> SecureNoteListScreen(
             onNoteClick = { navigateTo(Screen.NoteEdit) },
@@ -186,7 +211,7 @@ fun SecureVaultApp() {
         )
         Screen.GlobalSearch -> GlobalSearchScreen(
             onPasswordClick = { navigateTo(Screen.PasswordEdit) },
-            onDocumentClick = { /* TODO: Document detail view */ },
+            onDocumentClick = { /* TODO */ },
             onNoteClick = { navigateTo(Screen.NoteEdit) },
             onAddPassword = { navigateTo(Screen.PasswordEdit) },
             onAddDocument = { navigateTo(Screen.DocumentUpload) },
@@ -207,6 +232,8 @@ sealed class Screen {
     object PasswordEdit : Screen()
     object DocumentList : Screen()
     object DocumentUpload : Screen()
+    data class DocumentViewer(val id: Long) : Screen()
+    data class DocumentFullScreen(val documentId: Long, val page: Int) : Screen()
     object NoteList : Screen()
     object NoteEdit : Screen()
     object GlobalSearch : Screen()

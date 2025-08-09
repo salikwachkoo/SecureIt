@@ -21,7 +21,7 @@ import com.mohammadsalik.secureit.domain.model.Document
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentListScreen(
-    onDocumentClick: (Document) -> Unit,
+    onDocumentClick: (Long) -> Unit,
     onAddDocument: () -> Unit,
     onBack: () -> Unit,
     viewModel: DocumentListViewModel = hiltViewModel()
@@ -157,8 +157,8 @@ fun DocumentListScreen(
                         items(uiState.documents) { document ->
                             DocumentItem(
                                 document = document,
-                                onClick = { onDocumentClick(document) },
-                                onFavoriteToggle = { viewModel.toggleFavorite(document) }
+                                onClick = { onDocumentClick(document.id) },
+                                onDelete = { viewModel.deleteDocument(document) }
                             )
                         }
                     }
@@ -173,67 +173,21 @@ fun DocumentListScreen(
 fun DocumentItem(
     document: Document,
     onClick: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onDelete: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Document icon based on mime type
-            Icon(
-                imageVector = getDocumentIcon(document.mimeType),
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = getDocumentIcon(document.mimeType), contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.width(16.dp))
-
-            // Document details
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = document.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = document.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formatFileSize(document.fileSize),
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
+                Text(text = formatFileSize(document.fileSize), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Last accessed: ${formatDate(document.lastAccessed)}",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                if (document.category.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    AssistChip(
-                        onClick = { },
-                        label = { Text(document.category) }
-                    )
-                }
+                Text(text = "Last accessed: ${formatDate(document.lastAccessed)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                if (document.category.isNotBlank()) { Spacer(modifier = Modifier.height(4.dp)); AssistChip(onClick = {}, label = { Text(document.category) }) }
             }
-
-            // Favorite button
-            IconButton(onClick = onFavoriteToggle) {
-                Icon(
-                    imageVector = if (document.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (document.isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (document.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
         }
     }
 }

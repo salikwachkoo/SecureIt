@@ -98,35 +98,20 @@ class DocumentListViewModel @Inject constructor(
         }
     }
 
-    fun toggleFavorite(document: Document) {
+    fun deleteDocument(document: Document) {
         viewModelScope.launch {
             try {
-                val updatedDocument = document.toggleFavorite()
-                documentRepository.updateDocument(updatedDocument)
-                
-                // Update the document in the current list
-                val currentDocuments = _uiState.value.documents.toMutableList()
-                val index = currentDocuments.indexOfFirst { it.id == document.id }
-                if (index != -1) {
-                    currentDocuments[index] = updatedDocument
-                    _uiState.update { it.copy(documents = currentDocuments) }
-                }
+                documentRepository.deleteDocument(document)
+                val remaining = _uiState.value.documents.filter { it.id != document.id }
+                _uiState.update { it.copy(documents = remaining) }
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to update document")
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to delete document") }
             }
         }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
-    fun refresh() {
-        loadDocuments()
-        loadCategories()
-    }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun refresh() { loadDocuments(); loadCategories() }
 }
 
 data class DocumentListUiState(

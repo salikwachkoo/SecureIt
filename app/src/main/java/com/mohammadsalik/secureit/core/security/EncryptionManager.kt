@@ -208,6 +208,69 @@ object EncryptionManager {
         }
     }
 
+    fun encryptUriWithProgress(
+        context: Context,
+        inputUri: Uri,
+        outputFile: File,
+        onProgress: (processedBytes: Long) -> Unit,
+        isCancelled: () -> Boolean
+    ) {
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val iv = generateIV()
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, getSecretKey(), spec)
+
+            var processed = 0L
+            context.contentResolver.openInputStream(inputUri)?.use { input ->
+                FileOutputStream(outputFile).use { output ->
+                    output.write(iv)
+                    val buffer = ByteArray(64 * 1024)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        if (isCancelled()) throw java.util.concurrent.CancellationException("Encryption cancelled")
+                        val encrypted = cipher.update(buffer, 0, bytesRead)
+                        if (encrypted != null) output.write(encrypted)
+                        processed += bytesRead
+                        onProgress(processed)
+                    }
+                    val finalBlock = cipher.doFinal()
+                    output.write(finalBlock)
+                }
+            }
+        } catch (e: Exception) {
+            if (outputFile.exists()) try { outputFile.delete() } catch (_: Exception) {}
+            if (e is java.util.concurrent.CancellationException) throw e
+            throw SecurityException("Failed to encrypt URI", e)
+        }
+    }
+
+    fun decryptFileFromUri(context: Context, inputUri: Uri, outputFile: File) {
+        try {
+            // This assumes inputUri actually points to an encrypted file we previously wrote via SAF.
+            context.contentResolver.openInputStream(inputUri)?.use { input ->
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                val iv = ByteArray(GCM_IV_LENGTH)
+                val read = input.read(iv)
+                if (read != GCM_IV_LENGTH) throw SecurityException("Invalid encrypted stream")
+                val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+                cipher.init(Cipher.DECRYPT_MODE, getSecretKey(), spec)
+                FileOutputStream(outputFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        val decrypted = cipher.update(buffer, 0, bytesRead)
+                        if (decrypted != null) output.write(decrypted)
+                    }
+                    output.write(cipher.doFinal())
+                }
+            } ?: throw SecurityException("Cannot open encrypted Uri")
+        } catch (e: Exception) {
+            if (outputFile.exists()) try { outputFile.delete() } catch (_: Exception) {}
+            throw SecurityException("Failed to decrypt from Uri", e)
+        }
+    }
+
     fun generateSecureSalt(): String {
         val salt = ByteArray(32)
         secureRandom.nextBytes(salt)

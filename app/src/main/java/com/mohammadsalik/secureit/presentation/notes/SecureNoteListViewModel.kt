@@ -53,9 +53,7 @@ class SecureNoteListViewModel @Inject constructor(
             try {
                 val categories = secureNoteRepository.getAllCategories().first()
                 _uiState.update { it.copy(categories = categories) }
-            } catch (e: Exception) {
-                // Handle error silently for categories
-            }
+            } catch (e: Exception) { }
         }
     }
 
@@ -69,9 +67,7 @@ class SecureNoteListViewModel @Inject constructor(
                 }
                 _uiState.update { it.copy(notes = notes) }
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to search notes")
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to search notes") }
             }
         }
     }
@@ -84,49 +80,27 @@ class SecureNoteListViewModel @Inject constructor(
                 } else {
                     secureNoteRepository.getNotesByCategory(category).first()
                 }
-                _uiState.update { 
-                    it.copy(
-                        notes = notes,
-                        selectedCategory = category
-                    )
-                }
+                _uiState.update { it.copy(notes = notes, selectedCategory = category) }
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to filter notes")
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to filter notes") }
             }
         }
     }
 
-    fun toggleFavorite(note: SecureNote) {
+    fun deleteNote(note: SecureNote) {
         viewModelScope.launch {
             try {
-                val updatedNote = note.toggleFavorite()
-                secureNoteRepository.updateNote(updatedNote)
-                
-                // Update the note in the current list
-                val currentNotes = _uiState.value.notes.toMutableList()
-                val index = currentNotes.indexOfFirst { it.id == note.id }
-                if (index != -1) {
-                    currentNotes[index] = updatedNote
-                    _uiState.update { it.copy(notes = currentNotes) }
-                }
+                secureNoteRepository.deleteNote(note)
+                val remaining = _uiState.value.notes.filter { it.id != note.id }
+                _uiState.update { it.copy(notes = remaining) }
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to update note")
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to delete note") }
             }
         }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
-    fun refresh() {
-        loadNotes()
-        loadCategories()
-    }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun refresh() { loadNotes(); loadCategories() }
 }
 
 data class SecureNoteListUiState(
