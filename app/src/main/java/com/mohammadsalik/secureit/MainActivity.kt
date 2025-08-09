@@ -25,14 +25,20 @@ import com.mohammadsalik.secureit.presentation.documents.DocumentUploadScreen
 import com.mohammadsalik.secureit.presentation.notes.SecureNoteListScreen
 import com.mohammadsalik.secureit.presentation.notes.SecureNoteEditScreen
 import com.mohammadsalik.secureit.presentation.search.GlobalSearchScreen
+import com.mohammadsalik.secureit.core.security.SecurityManager
 import com.mohammadsalik.secureit.ui.theme.SecureItTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
         setContent {
             SecureItTheme {
                 Surface(
@@ -43,6 +49,44 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(1000)
+            try {
+                SecurityManager.initializeSecurity(this@MainActivity)
+                val securityStatus = SecurityManager.performSecurityCheck(this@MainActivity)
+
+                if (SecurityManager.shouldBlockApp(this@MainActivity)) {
+                    showSecurityWarning()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Security initialization failed: ${e.message}")
+            }
+        }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        try {
+            SecurityManager.enableSecurityProtection(this)
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Error enabling security protection: ${e.message}")
+        }
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        try {
+            SecurityManager.disableSecurityProtection(this)
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Error disabling security protection: ${e.message}")
+        }
+    }
+    
+    private fun showSecurityWarning() {
+        android.util.Log.w("MainActivity", "Security warning: Device may be compromised")
+        // In a real app, you might show a dialog or finish the activity
+        // finish()
     }
 }
 
@@ -53,7 +97,6 @@ fun SecureVaultApp() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Welcome) }
     var navigationStack by remember { mutableStateOf(listOf<Screen>()) }
 
-    // Determine initial screen based on authentication state
     LaunchedEffect(authState) {
         currentScreen = when {
             !authState.isPinSet -> Screen.Welcome

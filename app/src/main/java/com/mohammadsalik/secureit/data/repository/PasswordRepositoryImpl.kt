@@ -13,50 +13,120 @@ import javax.inject.Singleton
 
 @Singleton
 class PasswordRepositoryImpl @Inject constructor(
-    private val passwordDao: PasswordDao,
-    private val encryptionManager: EncryptionManager
+    private val passwordDao: PasswordDao
 ) : PasswordRepository {
 
     override fun getAllPasswords(): Flow<List<Password>> {
         return passwordDao.getAllPasswords().map { entities ->
-            PasswordMapper.toDomainList(entities)
+            entities.map { entity ->
+                PasswordMapper.toDomain(entity).copy(
+                    title = EncryptionManager.decryptString(entity.title),
+                    username = EncryptionManager.decryptString(entity.username),
+                    password = EncryptionManager.decryptString(entity.password),
+                    website = EncryptionManager.decryptString(entity.website),
+                    notes = EncryptionManager.decryptString(entity.notes),
+                    category = EncryptionManager.decryptString(entity.category)
+                )
+            }
         }
     }
 
     override suspend fun getPasswordById(id: Long): Password? {
         val entity = passwordDao.getPasswordById(id) ?: return null
-        return PasswordMapper.toDomain(entity)
+        return PasswordMapper.toDomain(entity).copy(
+            title = EncryptionManager.decryptString(entity.title),
+            username = EncryptionManager.decryptString(entity.username),
+            password = EncryptionManager.decryptString(entity.password),
+            website = EncryptionManager.decryptString(entity.website),
+            notes = EncryptionManager.decryptString(entity.notes),
+            category = EncryptionManager.decryptString(entity.category)
+        )
     }
 
     override fun getPasswordsByCategory(category: String): Flow<List<Password>> {
-        return passwordDao.getPasswordsByCategory(category).map { entities ->
-            PasswordMapper.toDomainList(entities)
+        return passwordDao.getPasswordsByCategory(EncryptionManager.encryptString(category)).map { entities ->
+            entities.map { entity ->
+                PasswordMapper.toDomain(entity).copy(
+                    title = EncryptionManager.decryptString(entity.title),
+                    username = EncryptionManager.decryptString(entity.username),
+                    password = EncryptionManager.decryptString(entity.password),
+                    website = EncryptionManager.decryptString(entity.website),
+                    notes = EncryptionManager.decryptString(entity.notes),
+                    category = EncryptionManager.decryptString(entity.category)
+                )
+            }
         }
     }
 
     override fun getFavoritePasswords(): Flow<List<Password>> {
         return passwordDao.getFavoritePasswords().map { entities ->
-            PasswordMapper.toDomainList(entities)
+            entities.map { entity ->
+                PasswordMapper.toDomain(entity).copy(
+                    title = EncryptionManager.decryptString(entity.title),
+                    username = EncryptionManager.decryptString(entity.username),
+                    password = EncryptionManager.decryptString(entity.password),
+                    website = EncryptionManager.decryptString(entity.website),
+                    notes = EncryptionManager.decryptString(entity.notes),
+                    category = EncryptionManager.decryptString(entity.category)
+                )
+            }
         }
     }
 
     override fun searchPasswords(query: String): Flow<List<Password>> {
-        return passwordDao.searchPasswords(query).map { entities ->
-            PasswordMapper.toDomainList(entities)
+        return passwordDao.getAllPasswords().map { entities ->
+            entities.filter { entity ->
+                val decryptedTitle = EncryptionManager.decryptString(entity.title)
+                val decryptedUsername = EncryptionManager.decryptString(entity.username)
+                val decryptedWebsite = EncryptionManager.decryptString(entity.website)
+                val decryptedNotes = EncryptionManager.decryptString(entity.notes)
+                
+                decryptedTitle.contains(query, ignoreCase = true) ||
+                decryptedUsername.contains(query, ignoreCase = true) ||
+                decryptedWebsite.contains(query, ignoreCase = true) ||
+                decryptedNotes.contains(query, ignoreCase = true)
+            }.map { entity ->
+                PasswordMapper.toDomain(entity).copy(
+                    title = EncryptionManager.decryptString(entity.title),
+                    username = EncryptionManager.decryptString(entity.username),
+                    password = EncryptionManager.decryptString(entity.password),
+                    website = EncryptionManager.decryptString(entity.website),
+                    notes = EncryptionManager.decryptString(entity.notes),
+                    category = EncryptionManager.decryptString(entity.category)
+                )
+            }
         }
     }
 
     override fun getAllCategories(): Flow<List<String>> {
-        return passwordDao.getAllCategories()
+        return passwordDao.getAllCategories().map { encryptedCategories ->
+            encryptedCategories.map { EncryptionManager.decryptString(it) }
+        }
     }
 
     override suspend fun insertPassword(password: Password): Long {
-        val entity = PasswordMapper.toEntity(password)
+        val encryptedPassword = password.copy(
+            title = EncryptionManager.encryptString(password.title),
+            username = EncryptionManager.encryptString(password.username),
+            password = EncryptionManager.encryptString(password.password),
+            website = EncryptionManager.encryptString(password.website),
+            notes = EncryptionManager.encryptString(password.notes),
+            category = EncryptionManager.encryptString(password.category)
+        )
+        val entity = PasswordMapper.toEntity(encryptedPassword)
         return passwordDao.insertPassword(entity)
     }
 
     override suspend fun updatePassword(password: Password) {
-        val entity = PasswordMapper.toEntity(password)
+        val encryptedPassword = password.copy(
+            title = EncryptionManager.encryptString(password.title),
+            username = EncryptionManager.encryptString(password.username),
+            password = EncryptionManager.encryptString(password.password),
+            website = EncryptionManager.encryptString(password.website),
+            notes = EncryptionManager.encryptString(password.notes),
+            category = EncryptionManager.encryptString(password.category)
+        )
+        val entity = PasswordMapper.toEntity(encryptedPassword)
         passwordDao.updatePassword(entity)
     }
 

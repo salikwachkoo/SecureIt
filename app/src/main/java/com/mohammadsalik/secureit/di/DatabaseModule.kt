@@ -50,11 +50,7 @@ object DatabaseModule {
         return database.secureNoteDao()
     }
 
-    @Provides
-    @Singleton
-    fun provideEncryptionManager(@ApplicationContext context: Context): EncryptionManager {
-        return EncryptionManager(context)
-    }
+    // EncryptionManager is now an object, no need to provide it
 
     @Provides
     @Singleton
@@ -65,10 +61,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun providePinAuthManager(
-        @ApplicationContext context: Context,
-        encryptionManager: EncryptionManager
+        @ApplicationContext context: Context
     ): PinAuthManager {
-        return PinAuthManager(context, encryptionManager)
+        return PinAuthManager(context)
     }
 
     @Provides
@@ -80,27 +75,24 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun providePasswordRepository(
-        passwordDao: PasswordDao,
-        encryptionManager: EncryptionManager
+        passwordDao: PasswordDao
     ): PasswordRepository {
-        return PasswordRepositoryImpl(passwordDao, encryptionManager)
+        return PasswordRepositoryImpl(passwordDao)
     }
 
     @Provides
     @Singleton
     fun provideDocumentRepository(
-        documentDao: DocumentDao,
-        encryptionManager: EncryptionManager
+        documentDao: DocumentDao
     ): DocumentRepository {
-        return DocumentRepositoryImpl(documentDao, encryptionManager)
+        return DocumentRepositoryImpl(documentDao)
     }
 
     @Provides
     @Singleton
     fun provideSecureNoteRepository(
-        secureNoteDao: SecureNoteDao,
-        encryptionManager: EncryptionManager
+        secureNoteDao: SecureNoteDao
     ): SecureNoteRepository {
-        return SecureNoteRepositoryImpl(secureNoteDao, encryptionManager)
+        return SecureNoteRepositoryImpl(secureNoteDao)
     }
 }

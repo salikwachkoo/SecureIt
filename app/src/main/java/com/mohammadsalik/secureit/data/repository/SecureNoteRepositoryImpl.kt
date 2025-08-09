@@ -13,8 +13,7 @@ import kotlinx.coroutines.flow.first
 
 @Singleton
 class SecureNoteRepositoryImpl @Inject constructor(
-    private val secureNoteDao: SecureNoteDao,
-    private val encryptionManager: EncryptionManager
+    private val secureNoteDao: SecureNoteDao
 ) : SecureNoteRepository {
 
     override fun getAllNotes(): Flow<List<SecureNote>> {

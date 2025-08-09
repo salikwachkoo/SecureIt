@@ -1,160 +1,245 @@
 package com.mohammadsalik.secureit.core.security
 
 import android.content.Context
+import android.net.Uri
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import androidx.security.crypto.EncryptedFile
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.security.KeyStore
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.inject.Inject
-import javax.inject.Singleton
+import javax.crypto.spec.SecretKeySpec
+import java.security.SecureRandom
+import java.util.*
 
-@Singleton
-class EncryptionManager @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
-    private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
-        load(null)
-    }
+object EncryptionManager {
+    private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
+    private const val KEY_ALIAS = "SecureVaultKey"
+    private const val TRANSFORMATION = "AES/GCM/NoPadding"
+    private const val GCM_IV_LENGTH = 12
+    private const val GCM_TAG_LENGTH = 128
 
     private val secureRandom = SecureRandom()
 
-    companion object {
-        private const val MASTER_KEY_ALIAS = "SecureVault_MasterKey"
-        private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val GCM_IV_LENGTH = 12
-        private const val GCM_TAG_LENGTH = 16
+    init {
+        ensureKeyExists()
     }
 
-    /**
-     * Generates a new master key and stores it in Android Keystore
-     */
-    fun generateMasterKey(): SecretKey {
-        val keyGenerator = KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES,
-            "AndroidKeyStore"
-        )
+    private fun ensureKeyExists() {
+        try {
+            val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER)
+            keyStore.load(null)
 
+            if (!keyStore.containsAlias(KEY_ALIAS)) {
+                createKey()
+            }
+        } catch (e: Exception) {
+            throw SecurityException("Failed to initialize encryption", e)
+        }
+    }
+
+    private fun createKey() {
+        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
         val keyGenParameterSpec = KeyGenParameterSpec.Builder(
-            MASTER_KEY_ALIAS,
+            KEY_ALIAS,
             KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
         )
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
             .setUserAuthenticationRequired(false)
+            .setRandomizedEncryptionRequired(true)
             .build()
 
         keyGenerator.init(keyGenParameterSpec)
-        return keyGenerator.generateKey()
+        keyGenerator.generateKey()
     }
 
-    /**
-     * Gets the master key from Android Keystore
-     */
-    fun getMasterKey(): SecretKey {
-        return keyStore.getKey(MASTER_KEY_ALIAS, null) as SecretKey
+    private fun getSecretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER)
+        keyStore.load(null)
+        return keyStore.getKey(KEY_ALIAS, null) as SecretKey
     }
 
-    /**
-     * Encrypts data using AES-256-GCM
-     */
-    suspend fun encrypt(data: ByteArray): EncryptedData {
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        val iv = generateIV()
-        val spec = GCMParameterSpec(GCM_TAG_LENGTH * 8, iv)
+    fun encryptString(plaintext: String): String {
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val iv = generateIV()
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, getSecretKey(), spec)
 
-        cipher.init(Cipher.ENCRYPT_MODE, getMasterKey(), spec)
-        val encryptedData = cipher.doFinal(data)
-
-        return EncryptedData(encryptedData, iv)
+            val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+            val combined = iv + encrypted
+            return Base64.getEncoder().encodeToString(combined)
+        } catch (e: Exception) {
+            throw SecurityException("Failed to encrypt string", e)
+        }
     }
 
-    /**
-     * Decrypts data using AES-256-GCM
-     */
-    suspend fun decrypt(encryptedData: EncryptedData): ByteArray {
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        val spec = GCMParameterSpec(GCM_TAG_LENGTH * 8, encryptedData.iv)
+    fun decryptString(encryptedText: String): String {
+        try {
+            val combined = Base64.getDecoder().decode(encryptedText)
+            val iv = combined.copyOfRange(0, GCM_IV_LENGTH)
+            val encrypted = combined.copyOfRange(GCM_IV_LENGTH, combined.size)
 
-        cipher.init(Cipher.DECRYPT_MODE, getMasterKey(), spec)
-        return cipher.doFinal(encryptedData.data)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.DECRYPT_MODE, getSecretKey(), spec)
+
+            val decrypted = cipher.doFinal(encrypted)
+            return String(decrypted, Charsets.UTF_8)
+        } catch (e: Exception) {
+            throw SecurityException("Failed to decrypt string", e)
+        }
     }
 
-    /**
-     * Encrypts a string
-     */
-    suspend fun encryptString(text: String): EncryptedData {
-        return encrypt(text.toByteArray(Charsets.UTF_8))
+    fun encryptFile(inputFile: File, outputFile: File) {
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val iv = generateIV()
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, getSecretKey(), spec)
+
+            FileInputStream(inputFile).use { input ->
+                FileOutputStream(outputFile).use { output ->
+                    // Write IV first
+                    output.write(iv)
+                    
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        val encrypted = cipher.update(buffer, 0, bytesRead)
+                        if (encrypted != null) {
+                            output.write(encrypted)
+                        }
+                    }
+                    
+                    val finalBlock = cipher.doFinal()
+                    output.write(finalBlock)
+                }
+            }
+        } catch (e: Exception) {
+            throw SecurityException("Failed to encrypt file", e)
+        }
     }
 
-    /**
-     * Decrypts a string
-     */
-    suspend fun decryptString(encryptedData: EncryptedData): String {
-        val decryptedBytes = decrypt(encryptedData)
-        return String(decryptedBytes, Charsets.UTF_8)
+    fun decryptFile(inputFile: File, outputFile: File) {
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            
+            FileInputStream(inputFile).use { input ->
+                // Read IV first
+                val iv = ByteArray(GCM_IV_LENGTH)
+                input.read(iv)
+                
+                val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+                cipher.init(Cipher.DECRYPT_MODE, getSecretKey(), spec)
+
+                FileOutputStream(outputFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        val decrypted = cipher.update(buffer, 0, bytesRead)
+                        if (decrypted != null) {
+                            output.write(decrypted)
+                        }
+                    }
+                    
+                    val finalBlock = cipher.doFinal()
+                    output.write(finalBlock)
+                }
+            }
+        } catch (e: Exception) {
+            throw SecurityException("Failed to decrypt file", e)
+        }
     }
 
-    /**
-     * Creates an EncryptedFile for secure file operations
-     */
-    // TODO: Fix EncryptedFile implementation
-    // fun createEncryptedFile(file: File): EncryptedFile {
-    //     return EncryptedFile.Builder(
-    //         context,
-    //         file,
-    //         getMasterKey(),
-    //         EncryptedFile.AES256_GCM_HKDF_4KB
-    //     ).build()
-    // }
+    fun encryptUri(context: Context, inputUri: Uri, outputFile: File) {
+        try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val iv = generateIV()
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, getSecretKey(), spec)
 
-    /**
-     * Generates a cryptographically secure salt
-     */
-    fun generateSalt(length: Int = 32): ByteArray {
-        val salt = ByteArray(length)
+            context.contentResolver.openInputStream(inputUri)?.use { input ->
+                FileOutputStream(outputFile).use { output ->
+                    // Write IV first
+                    output.write(iv)
+                    
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        val encrypted = cipher.update(buffer, 0, bytesRead)
+                        if (encrypted != null) {
+                            output.write(encrypted)
+                        }
+                    }
+                    
+                    val finalBlock = cipher.doFinal()
+                    output.write(finalBlock)
+                }
+            }
+        } catch (e: Exception) {
+            throw SecurityException("Failed to encrypt URI", e)
+        }
+    }
+
+    fun generateSecureSalt(): String {
+        val salt = ByteArray(32)
         secureRandom.nextBytes(salt)
-        return salt
+        return Base64.getEncoder().encodeToString(salt)
     }
 
-    /**
-     * Securely clears data from memory
-     */
-    fun secureClear(data: ByteArray) {
-        // Overwrite the data with zeros to prevent memory dumps
-        data.fill(0)
-    }
-
-    private fun generateIV(): ByteArray {
+    fun generateSecureIV(): ByteArray {
         val iv = ByteArray(GCM_IV_LENGTH)
         secureRandom.nextBytes(iv)
         return iv
     }
-}
 
-data class EncryptedData(val data: ByteArray, val iv: ByteArray) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as EncryptedData
-
-        if (!data.contentEquals(other.data)) return false
-        if (!iv.contentEquals(other.iv)) return false
-
-        return true
+    private fun generateIV(): ByteArray {
+        return generateSecureIV()
     }
 
-    override fun hashCode(): Int {
-        var result = data.contentHashCode()
-        result = 31 * result + iv.contentHashCode()
-        return result
+    fun hashPassword(password: String, salt: String): String {
+        try {
+            val combined = password + salt
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(combined.toByteArray(Charsets.UTF_8))
+            return Base64.getEncoder().encodeToString(hash)
+        } catch (e: Exception) {
+            throw SecurityException("Failed to hash password", e)
+        }
+    }
+
+    fun verifyPassword(password: String, salt: String, hash: String): Boolean {
+        val computedHash = hashPassword(password, salt)
+        return computedHash == hash
+    }
+
+    fun generateSecurePassword(length: Int = 16, includeSpecial: Boolean = true): String {
+        val chars = mutableListOf<Char>()
+        chars.addAll('A'..'Z')
+        chars.addAll('a'..'z')
+        chars.addAll('0'..'9')
+        
+        if (includeSpecial) {
+            chars.addAll("!@#$%^&*()_+-=[]{}|;:,.<>?".toList())
+        }
+
+        return (1..length)
+            .map { chars.random() }
+            .joinToString("")
+    }
+
+    fun isEncryptionAvailable(): Boolean {
+        return try {
+            ensureKeyExists()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 }

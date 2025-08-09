@@ -22,8 +22,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 @Singleton
 class PinAuthManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val encryptionManager: EncryptionManager
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val MAX_FAILED_ATTEMPTS = 5

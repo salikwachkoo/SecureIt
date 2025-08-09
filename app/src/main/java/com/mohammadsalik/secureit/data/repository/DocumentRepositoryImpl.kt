@@ -13,8 +13,7 @@ import javax.inject.Singleton
 
 @Singleton
 class DocumentRepositoryImpl @Inject constructor(
-    private val documentDao: DocumentDao,
-    private val encryptionManager: EncryptionManager
+    private val documentDao: DocumentDao
 ) : DocumentRepository {
     
     override fun getAllDocuments(): Flow<List<Document>> {
