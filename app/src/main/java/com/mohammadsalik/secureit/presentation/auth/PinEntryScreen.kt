@@ -3,6 +3,7 @@ package com.mohammadsalik.secureit.presentation.auth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -25,6 +26,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricManager
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.unit.dp
 import com.mohammadsalik.secureit.core.security.BiometricAuthManager
 import com.mohammadsalik.secureit.core.security.BiometricResult
 
@@ -38,11 +41,11 @@ fun PinEntryScreen(
     val bioState by viewModel.biometricSetupState.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val activity = ctx as? FragmentActivity
+    val scope = rememberCoroutineScope()
 
     // Auto biometric on entry if enabled and available. If not enrolled, deep link to enroll.
     LaunchedEffect(authState.isBiometricEnabled) {
         if (activity != null && authState.isBiometricEnabled) {
-            viewModel.checkBiometricAvailability()
             val mgr = BiometricAuthManager(ctx)
             when (mgr.canAuthenticateStatus()) {
                 BiometricManager.BIOMETRIC_SUCCESS -> {
@@ -109,7 +112,7 @@ fun PinEntryScreen(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // PIN Input Field
         OutlinedTextField(
@@ -151,46 +154,7 @@ fun PinEntryScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // PIN Dots
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            repeat(4) { index ->
-                Box(
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .size(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (index < pin.length) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .padding(2.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "○",
-                                fontSize = 8.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         // Submit Button
         Button(
@@ -209,6 +173,32 @@ fun PinEntryScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Fingerprint shortcut
+        if (activity != null && authState.isBiometricEnabled) {
+            OutlinedButton(
+                onClick = {
+                    val mgr = BiometricAuthManager(ctx)
+                    when (mgr.canAuthenticateStatus()) {
+                        BiometricManager.BIOMETRIC_SUCCESS -> {
+                            scope.launch {
+                                when (mgr.authenticate(activity)) {
+                                    is BiometricResult.Success -> { viewModel.onBiometricSuccess(); onPinCorrect() }
+                                    else -> { /* ignore */ }
+                                }
+                            }
+                        }
+                        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> mgr.launchBiometricEnrollment(activity)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Fingerprint, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Use fingerprint")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // Manual Biometric Button
         if (activity != null && authState.isBiometricEnabled) {

@@ -17,6 +17,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 import androidx.biometric.BiometricManager
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @Composable
 fun BiometricSetupScreen(
@@ -122,6 +124,7 @@ fun BiometricSetupScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                val scope = rememberCoroutineScope()
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -137,7 +140,16 @@ fun BiometricSetupScreen(
                                 val mgr = com.mohammadsalik.secureit.core.security.BiometricAuthManager(ctx)
                                 when (mgr.canAuthenticateStatus()) {
                                     BiometricManager.BIOMETRIC_SUCCESS -> {
-                                        viewModel.setupBiometric(checked)
+                                        if (checked) {
+                                            scope.launch {
+                                                when (mgr.authenticate(activity)) {
+                                                    is com.mohammadsalik.secureit.core.security.BiometricResult.Success -> viewModel.setupBiometric(true)
+                                                    else -> viewModel.setupBiometric(false)
+                                                }
+                                            }
+                                        } else {
+                                            viewModel.setupBiometric(false)
+                                        }
                                     }
                                     BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
                                         // open enrollment UI

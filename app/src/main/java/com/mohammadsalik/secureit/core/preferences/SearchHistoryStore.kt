@@ -31,7 +31,7 @@ class SearchHistoryStore @Inject constructor(
         context.searchDataStore.edit { prefs ->
             val csv = prefs[keyRecentQueries] ?: ""
             val list = if (csv.isBlank()) mutableListOf() else csv.split('\n').toMutableList()
-            // Move to front
+            
             list.remove(normalized)
             list.add(0, normalized)
             val trimmed = if (list.size > max) list.take(max) else list
