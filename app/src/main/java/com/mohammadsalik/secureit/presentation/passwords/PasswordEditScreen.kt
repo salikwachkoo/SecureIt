@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,41 +31,42 @@ fun PasswordEditScreen(
     viewModel: PasswordEditViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var title by remember { mutableStateOf("") }
+    var website by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var website by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
 
-    // Load password data if editing
     LaunchedEffect(passwordId) {
         if (passwordId != null) {
             viewModel.loadPassword(passwordId)
+        } else {
+            // Reset form for new password
+            website = ""
+            username = ""
+            password = ""
+            showPassword = false
+            // Also reset the password in ViewModel state for new passwords
+            viewModel.resetPasswordState()
         }
+        // Reset saved state
+        viewModel.resetSavedState()
     }
 
-    // Update form fields when password is loaded
     LaunchedEffect(uiState.password) {
         uiState.password?.let { loadedPassword ->
-            title = loadedPassword.title
+            website = loadedPassword.website
             username = loadedPassword.username
             password = loadedPassword.password
-            website = loadedPassword.website
-            notes = loadedPassword.notes
-            category = loadedPassword.category
         }
     }
 
-    // Handle save success
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
+            // Always navigate back after saving (both new and existing passwords)
             onSave()
         }
     }
 
-    // Re-evaluate strength when password changes
     LaunchedEffect(password) {
         viewModel.evaluateStrength(password)
     }
@@ -74,11 +76,10 @@ fun PasswordEditScreen(
             TopAppBar(
                 title = { Text(if (passwordId == null) "Add Password" else "Edit Password") },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onCancel) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.copyToClipboard(password) }) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy") }
-                    IconButton(onClick = { viewModel.savePassword(title, username, password, website, notes, category) }) {
+                    IconButton(onClick = { viewModel.savePassword(website, username, password) }) {
                         Icon(Icons.Default.Save, contentDescription = "Save")
                     }
                 }
@@ -93,56 +94,74 @@ fun PasswordEditScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Title
+            // Website/URL
             OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Title") },
+                value = website,
+                onValueChange = { website = it },
+                label = { Text("Website/URL") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                placeholder = { Text("e.g., google.com, github.com") }
             )
 
-            // Username
+            // Username (optional)
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Username") },
+                label = { Text("Username (optional)") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                placeholder = { Text("Leave empty if not needed") }
             )
 
             // Password + strength + generator
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (showPassword) "Hide" else "Show"
-                            )
-                        }
-                        IconButton(onClick = {
-                            password = viewModel.generatePassword()
-                        }) {
-                            Icon(Icons.Default.AutoFixHigh, contentDescription = "Generate")
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(
+                                    imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (showPassword) "Hide" else "Show"
+                                )
+                            }
+                            IconButton(onClick = {
+                                password = viewModel.generatePassword()
+                            }) {
+                                Icon(Icons.Default.AutoFixHigh, contentDescription = "Generate")
+                            }
                         }
                     }
+                )
+                
+                // Copy password button
+                IconButton(
+                    onClick = { viewModel.copyToClipboard(password) },
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy password"
+                    )
                 }
-            )
+            }
 
             // Strength meter
             uiState.strength?.let { strength ->
                 StrengthBar(result = strength)
             }
 
-            // Generator options
             Card {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Password Generator", fontWeight = FontWeight.SemiBold)
@@ -170,38 +189,13 @@ fun PasswordEditScreen(
                 }
             }
 
-            // Website
-            OutlinedTextField(
-                value = website,
-                onValueChange = { website = it },
-                label = { Text("Website") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            // Category
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Category") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            // Notes
-            OutlinedTextField(
-                value = notes,
-                onValueChange = { notes = it },
-                label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 4
-            )
-
             if (uiState.error != null) {
                 AssistChip(onClick = { viewModel.clearError() }, label = { Text(uiState.error!!) }, leadingIcon = {
                     Icon(Icons.Default.Error, contentDescription = null)
                 })
             }
+
+
 
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

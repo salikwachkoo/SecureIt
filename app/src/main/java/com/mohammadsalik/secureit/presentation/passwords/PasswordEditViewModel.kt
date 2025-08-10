@@ -53,16 +53,13 @@ class PasswordEditViewModel @Inject constructor(
     }
 
     fun savePassword(
-        title: String,
-        username: String,
-        password: String,
         website: String,
-        notes: String,
-        category: String
+        username: String,
+        password: String
     ) {
-        if (title.isBlank() || username.isBlank() || password.isBlank()) {
+        if (website.isBlank() || password.isBlank()) {
             _uiState.update { 
-                it.copy(error = "Title, username, and password are required")
+                it.copy(error = "Website and password are required")
             }
             return
         }
@@ -73,28 +70,30 @@ class PasswordEditViewModel @Inject constructor(
                 val passwordToSave = if (uiState.value.password != null) {
                     // Update existing password
                     uiState.value.password!!.copy(
-                        title = title,
+                        title = website, // Use website as title for backward compatibility
                         username = username,
                         password = password,
                         website = website,
-                        notes = notes,
-                        category = category
+                        notes = "", // Keep empty for simplified version
+                        category = "General" // Default category
                     )
                 } else {
                     // Create new password
                     Password.create(
-                        title = title,
+                        title = website, // Use website as title for backward compatibility
                         username = username,
                         password = password,
                         website = website,
-                        notes = notes,
-                        category = category
+                        notes = "", // Keep empty for simplified version
+                        category = "General" // Default category
                     )
                 }
 
-                passwordRepository.insertPassword(passwordToSave)
+                val newId = passwordRepository.insertPassword(passwordToSave)
+                val savedPassword = passwordToSave.copy(id = newId)
                 _uiState.update { 
                     it.copy(
+                        password = savedPassword,
                         isSaved = true,
                         isLoading = false
                     )
@@ -127,7 +126,6 @@ class PasswordEditViewModel @Inject constructor(
 
         val allChars = pools.joinToString("")
 
-        // Ensure at least one from each selected pool
         val required = pools.map { it[secureRandom.nextInt(it.length)] }
         val remaining = (1..(length - required.size)).map { allChars[secureRandom.nextInt(allChars.length)] }
         val raw = (required + remaining).shuffled(secureRandom).joinToString("")
@@ -168,6 +166,14 @@ class PasswordEditViewModel @Inject constructor(
 
     fun resetSavedState() {
         _uiState.update { it.copy(isSaved = false) }
+    }
+
+    fun clearSuccessState() {
+        _uiState.update { it.copy(isSaved = false) }
+    }
+
+    fun resetPasswordState() {
+        _uiState.update { it.copy(password = null) }
     }
 }
 

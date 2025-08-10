@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,11 +30,21 @@ fun SecureNoteEditScreen(
     var category by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
 
-    // Load note data if editing
+    // Load note data if editing or reset for new
     LaunchedEffect(noteId) {
         if (noteId != null) {
             viewModel.loadNote(noteId)
+        } else {
+            // Reset form for new note
+            title = ""
+            content = ""
+            category = ""
+            tags = ""
+            // Also reset the note in ViewModel state for new notes
+            viewModel.resetNoteState()
         }
+        // Reset saved state
+        viewModel.resetSavedState()
     }
 
     // Update form fields when note is loaded
@@ -49,6 +60,7 @@ fun SecureNoteEditScreen(
     // Handle save success
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
+            // Always navigate back after saving (both new and existing notes)
             onSave()
         }
     }
@@ -59,7 +71,7 @@ fun SecureNoteEditScreen(
                 title = { Text(if (noteId == null) "Add Note" else "Edit Note") },
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {

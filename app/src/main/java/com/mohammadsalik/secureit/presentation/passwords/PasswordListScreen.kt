@@ -79,29 +79,6 @@ fun PasswordListScreen(
                 )
             }
 
-            // Filter chips
-            LazyRow(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = uiState.selectedCategory == null,
-                        onClick = { viewModel.filterByCategory(null) },
-                        label = { Text("All") }
-                    )
-                }
-                items(uiState.categories) { category ->
-                    FilterChip(
-                        selected = uiState.selectedCategory == category,
-                        onClick = { viewModel.filterByCategory(category) },
-                        label = { Text(category) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             // Password list
             when {
                 uiState.isLoading -> {
@@ -183,8 +160,6 @@ fun PasswordItem(
                 Text(text = password.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = password.username, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                if (password.website.isNotBlank()) { Spacer(modifier = Modifier.height(2.dp)); Text(text = password.website, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
-                if (password.category.isNotBlank()) { Spacer(modifier = Modifier.height(4.dp)); AssistChip(onClick = {}, label = { Text(password.category) }) }
             }
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
         }

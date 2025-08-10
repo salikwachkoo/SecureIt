@@ -73,9 +73,11 @@ class SecureNoteEditViewModel @Inject constructor(
                     )
                 }
 
-                secureNoteRepository.insertNote(noteToSave)
+                val newId = secureNoteRepository.insertNote(noteToSave)
+                val savedNote = noteToSave.copy(id = newId)
                 _uiState.update { 
                     it.copy(
+                        note = savedNote,
                         isSaved = true,
                         isLoading = false
                     )
@@ -97,6 +99,10 @@ class SecureNoteEditViewModel @Inject constructor(
 
     fun resetSavedState() {
         _uiState.update { it.copy(isSaved = false) }
+    }
+
+    fun resetNoteState() {
+        _uiState.update { it.copy(note = null) }
     }
 }
 

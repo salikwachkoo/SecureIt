@@ -150,11 +150,12 @@ fun SecureVaultApp() {
             onForgotPin = { currentScreen = Screen.Welcome }
         )
         Screen.PasswordList -> PasswordListScreen(
-            onPasswordClick = { navigateTo(Screen.PasswordEdit) },
-            onAddPassword = { navigateTo(Screen.PasswordEdit) },
+            onPasswordClick = { password -> navigateTo(Screen.PasswordEdit(password.id)) },
+            onAddPassword = { navigateTo(Screen.PasswordEdit()) },
             onBack = { navigateBack() }
         )
-        Screen.PasswordEdit -> PasswordEditScreen(
+        is Screen.PasswordEdit -> PasswordEditScreen(
+            passwordId = screen.passwordId,
             onSave = { navigateBack() },
             onCancel = { navigateBack() }
         )
@@ -178,21 +179,22 @@ fun SecureVaultApp() {
             onBack = { navigateBack() }
         )
         Screen.NoteList -> SecureNoteListScreen(
-            onNoteClick = { navigateTo(Screen.NoteEdit) },
-            onAddNote = { navigateTo(Screen.NoteEdit) },
+            onNoteClick = { note -> navigateTo(Screen.NoteEdit(note.id)) },
+            onAddNote = { navigateTo(Screen.NoteEdit()) },
             onBack = { navigateBack() }
         )
-        Screen.NoteEdit -> SecureNoteEditScreen(
+        is Screen.NoteEdit -> SecureNoteEditScreen(
+            noteId = screen.noteId,
             onSave = { navigateBack() },
             onCancel = { navigateBack() }
         )
         Screen.GlobalSearch -> GlobalSearchScreen(
-            onPasswordClick = { navigateTo(Screen.PasswordEdit) },
+            onPasswordClick = { password -> navigateTo(Screen.PasswordEdit(password.id)) },
             onDocumentClick = { /* TODO */ },
-            onNoteClick = { navigateTo(Screen.NoteEdit) },
-            onAddPassword = { navigateTo(Screen.PasswordEdit) },
+            onNoteClick = { note -> navigateTo(Screen.NoteEdit(note.id)) },
+            onAddPassword = { navigateTo(Screen.PasswordEdit()) },
             onAddDocument = { navigateTo(Screen.DocumentUpload) },
-            onAddNote = { navigateTo(Screen.NoteEdit) },
+            onAddNote = { navigateTo(Screen.NoteEdit()) },
             onBack = { navigateBack() }
         )
         Screen.Settings -> SettingsScreen(onBack = { navigateBack() })
@@ -206,13 +208,13 @@ sealed class Screen {
     object MainVault : Screen()
     object PinEntry : Screen()
     object PasswordList : Screen()
-    object PasswordEdit : Screen()
+    data class PasswordEdit(val passwordId: Long? = null) : Screen()
     object DocumentList : Screen()
     object DocumentUpload : Screen()
     data class DocumentViewer(val id: Long) : Screen()
     data class DocumentFullScreen(val documentId: Long, val page: Int) : Screen()
     object NoteList : Screen()
-    object NoteEdit : Screen()
+    data class NoteEdit(val noteId: Long? = null) : Screen()
     object GlobalSearch : Screen()
     object Settings : Screen()
 }
